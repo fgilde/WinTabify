@@ -20,6 +20,7 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             {
                 try
                 {
+                    await ExerciseTwentyWindowsAsync();
                     for (int i = 0; i < 3; i++) await ExerciseExplorerAsync();
                     completion.SetResult();
                 }
@@ -31,6 +32,33 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
         return completion.Task;
+    }
+
+    private async Task ExerciseTwentyWindowsAsync()
+    {
+        var directory = Directory.CreateTempSubdirectory("WinTabify-Scale-");
+        var paths = Enumerable.Range(1, 20).Select(i => directory.CreateSubdirectory($"Folder-{i:D2}").FullName).ToArray();
+        var desktop = new TestWindows(paths, output);
+        try
+        {
+            foreach (var path in paths) await desktop.CreateWindowAsync(path);
+            var service = new MergeService(desktop);
+            var timer = Stopwatch.StartNew();
+            desktop.Measure = true;
+            var result = await service.GatherAsync(true);
+            var elapsed = timer.ElapsedMilliseconds;
+            desktop.Measure = false;
+            output.WriteLine($"20 distinct windows: total={elapsed} ms; scan={desktop.ScanMs} ms; tabs={desktop.TabsMs} ms; close={elapsed - desktop.ScanMs - desktop.TabsMs} ms");
+            Assert.Equal(19, result.Closed);
+            Assert.True(Assert.Single(desktop.ReadWindows()).ContainsExactly(paths));
+        }
+        finally
+        {
+            foreach (var w in desktop.ReadWindows().Where(w => w.Complete && w.Tabs.All(t => paths.Contains(t.Location))))
+                NativeShell.RequestWindowClose(w.Handle);
+            foreach (var path in paths) Directory.Delete(path);
+            directory.Delete();
+        }
     }
 
     private async Task ExerciseExplorerAsync()
@@ -88,8 +116,17 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
         private readonly WindowsExplorerDesktop desktop = new(message => output.WriteLine(message));
         private readonly HashSet<nint> owned = [];
 
-        public IReadOnlyList<ExplorerWindow> ReadWindows() =>
-            desktop.ReadWindows().Where(w => owned.Contains(w.Handle)).ToArray();
+        internal bool Measure { get; set; }
+        internal long ScanMs { get; private set; }
+        internal long TabsMs { get; private set; }
+
+        public IReadOnlyList<ExplorerWindow> ReadWindows()
+        {
+            var timer = Stopwatch.StartNew();
+            var windows = desktop.ReadWindows().Where(w => owned.Contains(w.Handle)).ToArray();
+            if (Measure) ScanMs += timer.ElapsedMilliseconds;
+            return windows;
+        }
 
         public async Task<ExplorerWindow> CreateWindowAsync(string firstLocation)
         {
@@ -99,11 +136,14 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             return created;
         }
 
-        public Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations)
+        public async Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations)
         {
             Assert.Contains(target.Handle, owned);
             Assert.All(locations, location => Assert.Contains(location, paths));
-            return desktop.AddTabsAsync(target, locations);
+            var timer = Stopwatch.StartNew();
+            var result = await desktop.AddTabsAsync(target, locations);
+            if (Measure) TabsMs += timer.ElapsedMilliseconds;
+            return result;
         }
 
         public async Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)

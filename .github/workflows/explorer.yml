@@ -1,0 +1,29 @@
+name: Explorer desktop test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/explorer.yml'
+      - 'src/WinTabify/Explorer/**'
+      - 'tests/WinTabify.Tests/ExplorerDesktopTests.cs'
+
+permissions:
+  contents: read
+
+jobs:
+  explorer:
+    runs-on: windows-11-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Exercise both modes against File Explorer
+        shell: pwsh
+        env:
+          WINTABIFY_EXPLORER_TEST: '1'
+        run: |
+          Write-Host "Windows $([Environment]::OSVersion.Version), session $([Diagnostics.Process]::GetCurrentProcess().SessionId)"
+          dotnet test tests/WinTabify.Tests -c Release --filter FullyQualifiedName~ExplorerDesktopTests --logger "console;verbosity=normal"

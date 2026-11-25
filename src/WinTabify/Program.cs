@@ -104,7 +104,7 @@ internal sealed class Program : Application
         try
         {
             var result = await ShellWorker.GatherAsync(settings.IncludeTabbed);
-            status = result.Created
+            status = result.Gathered
                 ? T($"{result.Locations} Tabs gesammelt. {result.Closed} Quellfenster geschlossen.",
                     $"Gathered {result.Locations} tabs. Closed {result.Closed} source windows.")
                 : T("Keine Fenster zum Zusammenführen.", "No windows to gather.");

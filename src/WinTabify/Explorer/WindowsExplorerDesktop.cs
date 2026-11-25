@@ -5,11 +5,12 @@ namespace WinTabify.Explorer;
 
 internal sealed class WindowsExplorerDesktop : IExplorerDesktop
 {
+    private static readonly TimeSpan NavigationTimeout = TimeSpan.FromSeconds(12);
+
     public IReadOnlyList<ExplorerWindow> ReadWindows()
     {
-        var frames = NativeShell.Frames();
         using var views = new ShellViews();
-        return frames.Select(views.Read).ToList();
+        return NativeShell.Frames().Select(views.Read).ToList();
     }
 
     public async Task<ExplorerWindow> CreateWindowAsync(string firstLocation)
@@ -26,7 +27,9 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
             });
             var window = await WaitAsync(() => ReadWindows().FirstOrDefault(w => !previous.Contains(w.Handle) &&
                 w.Complete && w.Tabs.Count == 1 && string.Equals(w.Tabs[0].Location, marker.FullName, StringComparison.OrdinalIgnoreCase)));
-            return await NavigateAsync(window, window.Tabs[0], firstLocation);
+            var tab = window.Tabs[0];
+            using (var views = new ShellViews()) views.Navigate(window.Handle, tab, firstLocation);
+            return await ConfirmAsync(window with { Tabs = [tab with { Location = firstLocation }] });
         }
         finally
         {
@@ -36,93 +39,114 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         }
     }
 
-    public async Task<ExplorerWindow> AddTabAsync(ExplorerWindow target, string location)
+    public async Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations)
     {
-        var root = AutomationElement.FromHandle(target.Handle);
-        var query = new AndCondition(
-            new PropertyCondition(AutomationElement.AutomationIdProperty, "AddButton"),
-            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button));
-        var button = root.FindFirst(TreeScope.Descendants, query);
         if (!Read(target.Handle).Matches(target)) throw new ExplorerChangedException();
-        if (button != null && button.TryGetCurrentPattern(InvokePattern.Pattern, out var action))
-            ((InvokePattern)action).Invoke();
-        else
+        var expected = target.Tabs.ToList();
+        var known = expected.Select(t => t.Handle).ToHashSet();
+        foreach (var location in locations)
         {
-            var active = target.Tabs.FirstOrDefault(t => NativeShell.IsWindowVisible(t.Handle));
-            if (active == null || !NativeShell.PostMessage(active.Handle, 0x0111, 0xA21B, 0))
-                throw new ExplorerChangedException();
+            var handles = NativeShell.TabHandles(target.Handle);
+            if (!known.SetEquals(handles)) throw new ExplorerChangedException();
+            RequestTab(target.Handle, handles);
+            var tab = await WaitAsync(() =>
+            {
+                var current = NativeShell.TabHandles(target.Handle);
+                if (!known.IsSubsetOf(current) || current.Count > known.Count + 1)
+                    throw new ExplorerChangedException();
+                if (current.Count == known.Count) return null;
+                nint handle = current.Single(h => !known.Contains(h));
+                using var views = new ShellViews();
+                var added = views.ReadTab(handle);
+                if (added == null) return null;
+                views.Navigate(target.Handle, added, location);
+                return added with { Location = location };
+            });
+            known.Add(tab.Handle);
+            expected.Add(tab);
         }
-        var before = target.Tabs.Select(t => t.Handle).ToHashSet();
-        var expanded = await WaitAsync(() =>
-        {
-            var current = Read(target.Handle);
-            return current.Complete && current.Tabs.Count == before.Count + 1 && target.Tabs.All(current.Tabs.Contains)
-                ? current : null;
-        });
-        return await NavigateAsync(expanded, expanded.Tabs.Single(t => !before.Contains(t.Handle)), location);
+        return await ConfirmAsync(target with { Tabs = expected });
     }
 
-    private static async Task<ExplorerWindow> NavigateAsync(ExplorerWindow window, ExplorerTab tab, string location)
+    private static void RequestTab(nint frame, List<nint> handles)
     {
-        using (var views = new ShellViews())
-        {
-            if (!views.Read(window.Handle).Matches(window)) throw new ExplorerChangedException();
-            views.Navigate(window.Handle, tab, location);
-        }
-        var expected = window with { Tabs = window.Tabs.Select(t => t == tab ? t with { Location = location } : t).ToList() };
-        return await WaitAsync(() =>
-        {
-            var current = Read(window.Handle);
-            return current.Matches(expected) ? current : null;
-        });
+        nint selected = handles.FirstOrDefault(NativeShell.IsWindowVisible);
+        if (selected != 0 && NativeShell.PostMessage(selected, 0x0111, 0xA21B, 0)) return;
+        var root = AutomationElement.FromHandle(frame);
+        var button = root.FindFirst(TreeScope.Descendants, new AndCondition(
+            new PropertyCondition(AutomationElement.AutomationIdProperty, "AddButton"),
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button)));
+        if (button == null || !button.TryGetCurrentPattern(InvokePattern.Pattern, out var action))
+            throw new ExplorerChangedException();
+        ((InvokePattern)action).Invoke();
     }
 
     public async Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)
     {
-        while (source.Tabs.Count > 0)
+        if (source.Handle == target.Handle) return false;
+        try
         {
-            if (!RequestClose(source, target)) return false;
-            var timer = Stopwatch.StartNew();
-            while (timer.Elapsed < TimeSpan.FromSeconds(4))
+            while (true)
             {
-                if (!NativeShell.IsWindow(source.Handle)) return true;
-                if (NativeShell.TabHandles(source.Handle).Count < source.Tabs.Count)
+                if (!NativeShell.IsWindowEnabled(source.Handle)) return false;
+                var closedTab = await RequestCloseAsync(source, target);
+                if (closedTab == null) return false;
+                var timer = Stopwatch.StartNew();
+                while (NativeShell.IsWindow(source.Handle))
                 {
-                    var remaining = Read(source.Handle);
-                    if (remaining.Complete)
+                    if (timer.Elapsed >= TimeSpan.FromSeconds(4)) return false;
+                    if (NativeShell.TabHandles(source.Handle).Count < source.Tabs.Count)
                     {
-                        if (remaining.Tabs.Count != source.Tabs.Count - 1 || !remaining.Tabs.All(source.Tabs.Contains))
-                            return false;
-                        source = remaining;
-                        break;
+                        var remaining = Read(source.Handle);
+                        if (remaining.Complete)
+                        {
+                            if (!IsVerifiedRemainder(remaining, source)) return false;
+                            source = remaining;
+                            break;
+                        }
                     }
+                    await Task.Delay(25);
                 }
-                await Task.Delay(75);
+                if (!NativeShell.IsWindow(source.Handle)) return true;
             }
-            if (timer.Elapsed >= TimeSpan.FromSeconds(4)) return !NativeShell.IsWindow(source.Handle);
         }
-        return false;
+        catch (Exception ex) when (ShellViews.IsUnavailable(ex) || ex is ElementNotAvailableException or ExplorerChangedException)
+        {
+            return !NativeShell.IsWindow(source.Handle);
+        }
     }
 
-    private static bool RequestClose(ExplorerWindow source, ExplorerWindow target)
+    private static async Task<ExplorerTab?> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target)
     {
-        if (source.Handle == target.Handle || !NativeShell.IsWindowEnabled(source.Handle)) return false;
-        var root = AutomationElement.FromHandle(source.Handle);
-        var strip = root.FindFirst(TreeScope.Descendants,
-            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Tab));
-        if (strip != null)
+        var timer = Stopwatch.StartNew();
+        do
         {
-            int count = strip.FindAll(TreeScope.Descendants,
-                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)).Count;
-            if (count > 0 && count != source.Tabs.Count) return false;
-        }
-        using var latest = new ShellViews();
-        if (!latest.Read(target.Handle).Matches(target) || !latest.Read(source.Handle).Matches(source))
+            if (!NativeShell.IsWindowEnabled(source.Handle)) return null;
+            using (var views = new ShellViews())
+            {
+                var destination = views.Read(target.Handle);
+                var current = views.Read(source.Handle);
+                if (destination.Complete && current.Complete)
+                {
+                    if (!destination.Matches(target) || !current.Matches(source)) return null;
+                    var tab = current.Tabs.FirstOrDefault(t => !NativeShell.IsWindowVisible(t.Handle)) ?? current.Tabs[0];
+                    if (current.Tabs.Count == 1)
+                        return NativeShell.PostMessage(source.Handle, 0x0010, 0, 0) ? tab : null;
+                    views.CloseTab(tab);
+                    return tab;
+                }
+            }
+            await Task.Delay(30);
+        } while (timer.Elapsed < TimeSpan.FromSeconds(2));
+        return null;
+    }
+
+    internal static bool IsVerifiedRemainder(ExplorerWindow current, ExplorerWindow previous)
+    {
+        if (current.Handle != previous.Handle || !current.Complete || current.Tabs.Count >= previous.Tabs.Count)
             return false;
-        if (source.Tabs.Count == 1) return NativeShell.PostMessage(source.Handle, 0x0010, 0, 0);
-        var selected = source.Tabs.FirstOrDefault(t => NativeShell.IsWindowVisible(t.Handle));
-        latest.CloseTab(selected ?? source.Tabs[0]);
-        return true;
+        var locations = previous.Tabs.Select(t => t.Location).ToList();
+        return current.Tabs.All(tab => locations.Remove(tab.Location));
     }
 
     private static ExplorerWindow Read(nint frame)
@@ -131,15 +155,20 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         return views.Read(frame);
     }
 
-    private static async Task<ExplorerWindow> WaitAsync(Func<ExplorerWindow?> probe)
+    private static Task<ExplorerWindow> ConfirmAsync(ExplorerWindow expected) => WaitAsync(() =>
+    {
+        var current = Read(expected.Handle);
+        return current.Matches(expected) ? current : null;
+    });
+
+    private static async Task<T> WaitAsync<T>(Func<T?> probe) where T : class
     {
         var timer = Stopwatch.StartNew();
         do
         {
-            var window = probe();
-            if (window != null) return window;
-            await Task.Delay(100);
-        } while (timer.Elapsed < TimeSpan.FromSeconds(12));
+            if (probe() is { } value) return value;
+            await Task.Delay(25);
+        } while (timer.Elapsed < NavigationTimeout);
         throw new ExplorerChangedException();
     }
 }

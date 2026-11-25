@@ -1,5 +1,5 @@
 using System.Windows.Threading;
-using System.Windows.Automation;
+using System.Diagnostics;
 using WinTabify.Explorer;
 using Xunit;
 using Xunit.Abstractions;
@@ -31,38 +31,40 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
     private async Task ExerciseExplorerAsync()
     {
         var directory = Directory.CreateTempSubdirectory("WinTabify-Test-");
-        var paths = new[] { "Work", "Music", "Photos" }
+        var paths = new[] { "Work", "Music", "Photos", "A", "B", "C", "D" }
             .Select(name => directory.CreateSubdirectory(name).FullName).ToArray();
         var desktop = new TestWindows(paths);
         try
         {
             var group = await desktop.CreateWindowAsync(paths[0]);
-            await desktop.AddTabAsync(group, paths[1]);
+            await desktop.AddTabsAsync(group, [paths[1]]);
             await desktop.CreateWindowAsync(paths[1]);
             await desktop.CreateWindowAsync(paths[2]);
 
             var service = new MergeService(desktop);
+            var timer = Stopwatch.StartNew();
             var first = await service.GatherAsync(false);
-            Assert.Equal(2, first.Closed);
+            output.WriteLine($"Two single windows: {timer.ElapsedMilliseconds} ms");
+            Assert.Equal(1, first.Closed);
             Assert.Equal(2, desktop.ReadWindows().Count);
             Assert.Contains(desktop.ReadWindows(), w => w.Handle == group.Handle);
+            var overlapping = await desktop.CreateWindowAsync(paths[1]);
+            await desktop.AddTabsAsync(overlapping, [paths[0], paths[1], paths[3], paths[4]]);
+            var extras = await desktop.CreateWindowAsync(paths[5]);
+            await desktop.AddTabsAsync(extras, [paths[6]]);
+            timer.Restart();
             var second = await service.GatherAsync(true);
-            if (second.Closed != 2)
-            {
-                output.WriteLine(second.ToString());
-                foreach (var window in desktop.ReadWindows())
-                {
-                    var root = AutomationElement.FromHandle(window.Handle);
-                    var items = root.FindAll(TreeScope.Descendants, new PropertyCondition(
-                        AutomationElement.ControlTypeProperty, ControlType.TabItem));
-                    output.WriteLine($"Frame {window.Handle}: enabled={NativeShell.IsWindowEnabled(window.Handle)}, " +
-                        $"complete={window.Complete}, shell tabs={window.Tabs.Count}, accessible tabs={items.Count}");
-                    foreach (AutomationElement element in items)
-                        output.WriteLine($"  Tab: {element.Current.Name} ({element.Current.AutomationId})");
-                }
-            }
-            Assert.Equal(2, second.Closed);
-            Assert.True(Assert.Single(desktop.ReadWindows()).ContainsExactly(paths));
+            output.WriteLine($"Four windows including a five-tab source with duplicates: {timer.ElapsedMilliseconds} ms, {second}");
+            Assert.Equal(3, second.Closed);
+            var target = Assert.Single(desktop.ReadWindows());
+            Assert.True(target.ContainsExactly(paths));
+            var duplicates = await desktop.CreateWindowAsync(paths[3]);
+            await desktop.AddTabsAsync(duplicates, [paths[0], paths[3]]);
+            timer.Restart();
+            var last = await service.GatherAsync(true);
+            output.WriteLine($"Fully represented three-tab source: {timer.ElapsedMilliseconds} ms, {last}");
+            Assert.Equal(1, last.Closed);
+            Assert.True(Assert.Single(desktop.ReadWindows()).Matches(target));
         }
         finally
         {
@@ -92,11 +94,11 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             return created;
         }
 
-        public Task<ExplorerWindow> AddTabAsync(ExplorerWindow target, string location)
+        public Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations)
         {
             Assert.Contains(target.Handle, owned);
-            Assert.Contains(location, paths);
-            return desktop.AddTabAsync(target, location);
+            Assert.All(locations, location => Assert.Contains(location, paths));
+            return desktop.AddTabsAsync(target, locations);
         }
 
         public Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)

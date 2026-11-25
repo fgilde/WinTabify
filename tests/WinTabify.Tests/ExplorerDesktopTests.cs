@@ -1,4 +1,5 @@
 using System.Windows.Threading;
+using System.Windows.Automation;
 using System.Diagnostics;
 using WinTabify.Explorer;
 using Xunit;
@@ -84,7 +85,7 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
 
     private sealed class TestWindows(string[] paths, ITestOutputHelper output) : IExplorerDesktop
     {
-        private readonly WindowsExplorerDesktop desktop = new();
+        private readonly WindowsExplorerDesktop desktop = new(message => output.WriteLine(message));
         private readonly HashSet<nint> owned = [];
 
         public IReadOnlyList<ExplorerWindow> ReadWindows() =>
@@ -118,6 +119,15 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
                 output.WriteLine($"Frame {source.Handle}: initially {source.Tabs.Count} tabs, now {remaining?.Tabs.Count}, " +
                     $"enabled={NativeShell.IsWindowEnabled(source.Handle)}, complete={remaining?.Complete}, " +
                     $"paths={string.Join(", ", remaining?.Tabs.Select(t => t.Location) ?? [])}.");
+                if (NativeShell.IsWindow(source.Handle))
+                {
+                    var root = AutomationElement.FromHandle(source.Handle);
+                    var controls = root.FindAll(TreeScope.Descendants, new OrCondition(
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)));
+                    foreach (AutomationElement element in controls)
+                        output.WriteLine($"Element: {element.Current.ControlType.ProgrammaticName}, id={element.Current.AutomationId}, name={element.Current.Name}");
+                }
             }
             return closed;
         }

@@ -3,7 +3,7 @@ using System.Windows.Automation;
 
 namespace WinTabify.Explorer;
 
-internal sealed class WindowsExplorerDesktop : IExplorerDesktop
+internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IExplorerDesktop
 {
     private static readonly TimeSpan NavigationTimeout = TimeSpan.FromSeconds(12);
 
@@ -96,7 +96,7 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         if (source.Handle == target.Handle) return false;
         try
         {
-            if (!await RequestCloseAsync(source, target)) return !NativeShell.IsWindow(source.Handle);
+            if (!await RequestCloseAsync(source, target, true)) return !NativeShell.IsWindow(source.Handle);
             var quiet = Stopwatch.StartNew();
             var limit = Stopwatch.StartNew();
             int lastCount = source.Tabs.Count;
@@ -116,12 +116,13 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
                     var remaining = Read(source.Handle);
                     if (remaining.Matches(source) || IsVerifiedRemainder(remaining, source))
                     {
-                        if (await RequestCloseAsync(remaining, target))
+                        if (await RequestCloseAsync(remaining, target, false))
                         {
                             source = remaining;
                             attempts++;
                         }
                     }
+                    else trace?.Invoke($"Frame {source.Handle}: remainder {remaining.Tabs.Count}/{source.Tabs.Count}, complete={remaining.Complete}.");
                     quiet.Restart();
                 }
                 if (limit.Elapsed.TotalSeconds >= 7) return !NativeShell.IsWindow(source.Handle);
@@ -131,19 +132,20 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         }
         catch (Exception ex) when (ShellViews.IsUnavailable(ex) || ex is ElementNotAvailableException or ExplorerChangedException)
         {
+            trace?.Invoke($"Frame {source.Handle}: {ex.GetType().Name} {ex.Message}");
             return !NativeShell.IsWindow(source.Handle);
         }
     }
 
-    private static bool HasUnaccountedTabs(ExplorerWindow source)
+    private static int? AccessibleTabCount(AutomationElement root)
     {
-        var strip = AutomationElement.FromHandle(source.Handle).FindFirst(TreeScope.Descendants,
+        var strip = root.FindFirst(TreeScope.Descendants,
             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Tab));
-        return strip != null && strip.FindAll(TreeScope.Descendants,
-            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)).Count > source.Tabs.Count;
+        return strip?.FindAll(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)).Count;
     }
 
-    private static async Task<bool> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target)
+    private async Task<bool> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target, bool first)
     {
         var timer = Stopwatch.StartNew();
         do
@@ -155,8 +157,29 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
                 var current = views.Read(source.Handle);
                 if (destination.Complete && current.Complete)
                 {
-                    if (!destination.ContainsExactly(target.Tabs.Select(t => t.Location).ToArray()) ||
-                        !current.Matches(source) || HasUnaccountedTabs(current)) return false;
+                    var root = AutomationElement.FromHandle(source.Handle);
+                    var accessible = AccessibleTabCount(root);
+                    bool retained = destination.ContainsExactly(target.Tabs.Select(t => t.Location).ToArray());
+                    bool same = current.Matches(source);
+                    if (!retained || !same || accessible > current.Tabs.Count)
+                    {
+                        trace?.Invoke($"Frame {source.Handle}: destination={retained}, source={same}, accessible={accessible}, native={current.Tabs.Count}.");
+                        return false;
+                    }
+                    if (first && current.Tabs.Count > 1)
+                    {
+                        var titleBar = root.FindFirst(TreeScope.Descendants,
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TitleBar));
+                        var close = titleBar?.FindFirst(TreeScope.Descendants,
+                            new PropertyCondition(AutomationElement.AutomationIdProperty, "Close"));
+                        if (close != null && close.TryGetCurrentPattern(InvokePattern.Pattern, out var action))
+                        {
+                            trace?.Invoke($"Frame {source.Handle}: invoking title bar Close for {current.Tabs.Count} tabs.");
+                            ((InvokePattern)action).Invoke();
+                            return true;
+                        }
+                    }
+                    trace?.Invoke($"Frame {source.Handle}: requesting Shell close for {current.Tabs.Count} tabs.");
                     return views.RequestClose(current);
                 }
             }

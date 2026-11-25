@@ -17,8 +17,8 @@ internal interface IExplorerDesktop
 {
     IReadOnlyList<ExplorerWindow> ReadWindows();
     Task<ExplorerWindow> CreateWindowAsync(string firstLocation);
-    Task<ExplorerWindow> AddTabAsync(ExplorerWindow target, string location);
+    Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations);
     Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target);
 }
 
-internal sealed record MergeResult(int Locations, int Closed, int Unreadable, int Kept, bool Created);
+internal sealed record MergeResult(int Locations, int Closed, int Unreadable, int Kept, bool Gathered);

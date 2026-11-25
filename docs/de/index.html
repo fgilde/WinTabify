@@ -40,8 +40,8 @@
           <p class="eyebrow">Windows 11 / File Explorer</p>
           <h1>Viele Fenster.<br /><em>Ein Explorer.</em></h1>
           <p class="lede">
-            Ein Tastenkürzel sammelt deine offenen Ordner als Tabs. Im neuen
-            Explorer-Fenster hat jeder Ordner genau einen Platz.
+            Ein Tastenkürzel sammelt deine offenen Ordner als Tabs. Im
+            gemeinsamen Explorer-Fenster hat jeder Ordner genau einen Platz.
           </p>
           <div class="actions">
             <a class="action" href="#install"
@@ -122,35 +122,113 @@
             <ol class="steps">
               <li class="step">
                 <div>
-                  <h3>Download auswählen</h3>
+                  <h3>Windows-Download auswählen</h3>
                   <p>
-                    Für Intel und AMD nimm x64, für einen Snapdragon-PC Arm64.
-                    Beide ZIP-Pakete enthalten die .NET-Laufzeit.
+                    Für Intel und AMD nimm x64, für Snapdragon Arm64. Die kleine
+                    Variante nutzt die .NET 10 Desktop Runtime deiner
+                    Architektur. Falls sie fehlt, bietet das Setup die
+                    Installation an.
                   </p>
-                  <div class="downloads">
-                    <a
-                      class="download"
-                      href="../downloads/WinTabify-win-x64.zip"
-                      download
-                      >Windows x64 <small>ZIP ↓</small></a
-                    >
-                    <a
-                      class="download"
-                      href="../downloads/WinTabify-win-arm64.zip"
-                      download
-                      >Windows Arm64 <small>ZIP ↓</small></a
-                    >
-                  </div>
+                  <table class="download-table">
+                    <caption>
+                      Setup als einzelne EXE
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Windows</th>
+                        <th scope="col">Mit .NET</th>
+                        <th scope="col">Ohne .NET</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <th scope="row">x64</th>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="../downloads/win-x64-bundled/WinTabify-Setup.exe"
+                            aria-label="x64-Setup mit .NET herunterladen"
+                            >EXE ↓</a
+                          >
+                        </td>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="../downloads/win-x64-slim/WinTabify-Setup.exe"
+                            aria-label="x64-Setup ohne mitgelieferte Runtime herunterladen"
+                            >EXE ↓</a
+                          >
+                        </td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Arm64</th>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="../downloads/win-arm64-bundled/WinTabify-Setup.exe"
+                            aria-label="Arm64-Setup mit .NET herunterladen"
+                            >EXE ↓</a
+                          >
+                        </td>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="../downloads/win-arm64-slim/WinTabify-Setup.exe"
+                            aria-label="Arm64-Setup ohne mitgelieferte Runtime herunterladen"
+                            >EXE ↓</a
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <details class="portable">
+                    <summary>Portable ZIP-Downloads</summary>
+                    <p>
+                      Entpacke das gesamte ZIP in einen beschreibbaren Ordner
+                      und starte WinTabify. Die Update-Dateien gehören zur
+                      portablen App.
+                    </p>
+                    <ul>
+                      <li>
+                        x64 ·
+                        <a download href="../downloads/WinTabify-win-x64.zip"
+                          >Mit .NET</a
+                        >
+                        ·
+                        <a
+                          download
+                          href="../downloads/WinTabify-win-x64-slim.zip"
+                          >Ohne .NET</a
+                        >
+                      </li>
+                      <li>
+                        Arm64 ·
+                        <a download href="../downloads/WinTabify-win-arm64.zip"
+                          >Mit .NET</a
+                        >
+                        ·
+                        <a
+                          download
+                          href="../downloads/WinTabify-win-arm64-slim.zip"
+                          >Ohne .NET</a
+                        >
+                      </li>
+                    </ul>
+                  </details>
                 </div>
               </li>
               <li class="step">
                 <div>
-                  <h3>Entpacken und starten</h3>
+                  <h3>Setup starten</h3>
                   <p>
-                    Entpacke das gesamte Archiv in einen festen Ordner und öffne
-                    <code>WinTabify.exe</code>. Das orange Ordnersymbol
-                    erscheint im Infobereich, gegebenenfalls unter dem kleinen
-                    Pfeil.
+                    Öffne die heruntergeladene EXE. WinTabify wird für dein
+                    Konto installiert und erscheint im Infobereich. Wenn du die
+                    erste ZIP-Version verwendest, beende sie vorher im Tray.
+                    Tastenkürzel und Tab-Einstellung werden übernommen.
                   </p>
                 </div>
               </li>
@@ -226,30 +304,37 @@
               </p>
             </details>
             <details class="doc">
-              <summary>
-                Was passiert, wenn sich ein Fenster oder Ordner ändert?
-              </summary>
+              <summary>Welches Fenster bleibt offen?</summary>
               <p>
-                WinTabify prüft die Ordner im neuen Fenster und anschließend
-                jedes Quellfenster vor dem Schließen. Bei unlesbaren Tabs,
-                Änderungen oder einer Schließbestätigung kann ein Quellfenster
-                offen bleiben. Nach einem Abbruch kann auch das teilweise
-                gefüllte Zielfenster offen sein.
+                WinTabify behält das geeignete Fenster mit den meisten bereits
+                eindeutigen Tabs und öffnet nur fehlende Ordner. Sobald ihre
+                Ordner bestätigt sind, schließt es die anderen berücksichtigten
+                Fenster, auch wenn diese ausschließlich Duplikate enthalten.
+                Enthält jedes geeignete Fenster selbst doppelte Tabs, legt
+                WinTabify ein neues Ziel an. Geänderte oder unlesbare Fenster
+                können offen bleiben.
               </p>
+            </details>
+            <details class="doc">
+              <summary>Wie funktionieren Updates?</summary>
               <p>
-                Neue Tabs öffnen den jeweiligen Ordner. Verlauf, Markierungen
-                und Scrollposition gehören zum ursprünglichen Tab.
+                WinTabify prüft beim Start und alle sechs Stunden auf Updates.
+                Passende Updates für deine Architektur und Runtime-Variante
+                werden im Hintergrund geladen. Der Neustart wartet, bis das
+                Sammeln beendet und das Einstellungsfenster geschlossen ist.
+                Unter Einstellungen kannst du automatische Updates abschalten.
+                Im Tray-Menü kannst du jederzeit nach Updates suchen.
               </p>
             </details>
             <details class="doc">
               <summary>Autostart und Deinstallation</summary>
               <p>
-                Für den Autostart drücke Win + R, gib
-                <code>shell:startup</code> ein und lege dort eine Verknüpfung zu
-                <code>WinTabify.exe</code> ab. Zum Deinstallieren beende die App
-                über das Tray und entferne den entpackten Ordner sowie die
-                Autostart-Verknüpfung. Gespeicherte Einstellungen kannst du
-                unter <code>%LOCALAPPDATA%\WinTabify</code> löschen.
+                Für den Autostart kopiere die installierte Startmenü-Verknüpfung
+                nach <code>shell:startup</code>. Zum Deinstallieren beende
+                WinTabify im Tray und wähle es in den Windows-Einstellungen
+                unter Apps aus. Bei der portablen Version entfernst du den
+                entpackten Ordner. Deine Einstellungen liegen unter
+                <code>%LOCALAPPDATA%\WinTabify</code>.
               </p>
             </details>
           </div>

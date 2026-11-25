@@ -33,7 +33,12 @@ public sealed class SettingsTests
         {
             Assert.Null(Settings.Load(file));
             Settings.Default.Save(file);
-            var next = new Settings(Shortcut.Defaults[1], false);
+            File.WriteAllText(file, """{"Shortcut":{"Modifiers":10,"Key":69},"IncludeTabbed":false}""");
+            var migrated = Settings.Load(file)!;
+            Assert.True(migrated.AutomaticUpdates);
+            Assert.False(migrated.IncludeTabbed);
+            Assert.Equal(Shortcut.Defaults[0], migrated.Shortcut);
+            var next = new Settings(Shortcut.Defaults[1], false, false);
             next.Save(file);
             Assert.Equal(next, Settings.Load(file));
             Assert.False(File.Exists(file + ".tmp"));

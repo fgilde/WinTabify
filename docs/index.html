@@ -41,7 +41,7 @@
           <h1>Many windows.<br /><em>One Explorer.</em></h1>
           <p class="lede">
             Press one shortcut to gather your open folders into tabs. Each
-            folder gets one place in the new window.
+            folder gets one place in the Explorer window you keep.
           </p>
           <div class="actions">
             <a class="action" href="#install"
@@ -115,34 +115,109 @@
             <ol class="steps">
               <li class="step">
                 <div>
-                  <h3>Choose your download</h3>
+                  <h3>Choose a Windows download</h3>
                   <p>
-                    Use x64 for Intel or AMD, Arm64 for a Snapdragon PC. Both
-                    ZIP packages include the .NET runtime.
+                    Use x64 on Intel or AMD and Arm64 on Snapdragon. The slim
+                    version uses the .NET 10 Desktop Runtime for your
+                    architecture. Setup offers to install it if needed.
                   </p>
-                  <div class="downloads">
-                    <a
-                      class="download"
-                      href="downloads/WinTabify-win-x64.zip"
-                      download
-                      >Windows x64 <small>ZIP ↓</small></a
-                    >
-                    <a
-                      class="download"
-                      href="downloads/WinTabify-win-arm64.zip"
-                      download
-                      >Windows Arm64 <small>ZIP ↓</small></a
-                    >
-                  </div>
+                  <table class="download-table">
+                    <caption>
+                      Single-EXE installers
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Windows</th>
+                        <th scope="col">Runtime included</th>
+                        <th scope="col">Slim download</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <th scope="row">x64</th>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="downloads/win-x64-bundled/WinTabify-Setup.exe"
+                            aria-label="x64 bundled setup"
+                            >EXE ↓</a
+                          >
+                        </td>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="downloads/win-x64-slim/WinTabify-Setup.exe"
+                            aria-label="x64 slim setup"
+                            >EXE ↓</a
+                          >
+                        </td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Arm64</th>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="downloads/win-arm64-bundled/WinTabify-Setup.exe"
+                            aria-label="arm64 bundled setup"
+                            >EXE ↓</a
+                          >
+                        </td>
+                        <td>
+                          <a
+                            class="download"
+                            download
+                            href="downloads/win-arm64-slim/WinTabify-Setup.exe"
+                            aria-label="arm64 slim setup"
+                            >EXE ↓</a
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <details class="portable">
+                    <summary>Portable ZIP downloads</summary>
+                    <p>
+                      Extract the entire ZIP into a writable folder and start
+                      WinTabify. Keep the updater files alongside the app.
+                    </p>
+                    <ul>
+                      <li>
+                        x64 ·
+                        <a download href="downloads/WinTabify-win-x64.zip"
+                          >Runtime included</a
+                        >
+                        ·
+                        <a download href="downloads/WinTabify-win-x64-slim.zip"
+                          >Slim ZIP</a
+                        >
+                      </li>
+                      <li>
+                        Arm64 ·
+                        <a download href="downloads/WinTabify-win-arm64.zip"
+                          >Runtime included</a
+                        >
+                        ·
+                        <a
+                          download
+                          href="downloads/WinTabify-win-arm64-slim.zip"
+                          >Slim ZIP</a
+                        >
+                      </li>
+                    </ul>
+                  </details>
                 </div>
               </li>
               <li class="step">
                 <div>
-                  <h3>Extract and launch</h3>
+                  <h3>Run setup</h3>
                   <p>
-                    Extract the entire archive into a permanent folder and open
-                    <code>WinTabify.exe</code>. Its orange folder icon appears
-                    in the notification area, sometimes under the small arrow.
+                    Open the downloaded EXE. WinTabify installs for your account
+                    and appears in the notification area. Coming from the
+                    original ZIP? Quit that copy first. Your shortcut and tab
+                    preference carry over.
                   </p>
                 </div>
               </li>
@@ -217,27 +292,33 @@
               </p>
             </details>
             <details class="doc">
-              <summary>What if a folder or a window changes?</summary>
+              <summary>Which window stays open?</summary>
               <p>
-                WinTabify checks the folders in the new window, then rechecks
-                each source before closing it. Unreadable tabs, a changed window
-                or a close confirmation can leave a source window open. An
-                interrupted merge can leave the partially filled destination
-                open, too.
+                WinTabify keeps the eligible window with the most distinct tabs
+                and opens only missing folders. It closes other eligible windows
+                once their locations are confirmed, including windows that
+                contain only duplicates. If every eligible window already
+                contains duplicate tabs, it creates a clean destination. An
+                unreadable or changed window can stay open.
               </p>
+            </details>
+            <details class="doc">
+              <summary>How do updates work?</summary>
               <p>
-                New tabs reopen the folder location. Navigation history,
-                selection and scroll position belong to the original tab.
+                WinTabify checks at startup and every six hours. It downloads
+                updates for your architecture and runtime choice in the
+                background, then restarts when folder gathering is finished and
+                settings are closed. You can turn automatic updates off in
+                Settings or choose Check for updates in the tray menu.
               </p>
             </details>
             <details class="doc">
               <summary>Start at sign-in or uninstall</summary>
               <p>
-                For auto-start, press Win + R, enter
-                <code>shell:startup</code> and place a shortcut to
-                <code>WinTabify.exe</code> there. To uninstall, quit from the
-                tray and remove the extracted folder and startup shortcut. You
-                can delete saved preferences from
+                For auto-start, copy the installed Start menu shortcut to
+                <code>shell:startup</code>. To uninstall, quit from the tray and
+                choose WinTabify in Windows Settings → Apps. For a portable
+                copy, remove its extracted folder. Preferences are stored in
                 <code>%LOCALAPPDATA%\WinTabify</code>.
               </p>
             </details>

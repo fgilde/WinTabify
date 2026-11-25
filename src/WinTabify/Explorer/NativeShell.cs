@@ -24,6 +24,8 @@ internal static class NativeShell
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool PostMessage(nint window, uint message, nint wParam, nint lParam);
 
+    internal static bool RequestWindowClose(nint frame) => PostMessage(frame, 0x0112, 0xF060, 0);
+
     internal static List<nint> Frames()
     {
         var frames = new List<nint>();

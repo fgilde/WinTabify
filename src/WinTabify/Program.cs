@@ -16,6 +16,7 @@ internal sealed class Program : Application
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinTabify", "settings.json");
     private Settings settings = Settings.Default;
     private SettingsWindow? editor;
+    private TrayUpdates? updates;
     private HotkeyWindow hotkey = null!;
     private NotifyIcon tray = null!;
     private ToolStripItem gather = null!, configure = null!, exit = null!;
@@ -25,6 +26,7 @@ internal sealed class Program : Application
     [STAThread]
     private static void Main()
     {
+        Velopack.VelopackApp.Build().SetAutoApplyOnStartup(false).Run();
         using var instance = new Mutex(true, @"Local\WinTabify.Instance", out bool first);
         using var show = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\WinTabify.Settings");
         if (!first) { show.Set(); return; }
@@ -48,6 +50,8 @@ internal sealed class Program : Application
         var menu = new ContextMenuStrip();
         gather = menu.Items.Add(T("Explorer-Fenster sammeln", "Gather Explorer windows"), null, (_, _) => StartMerge());
         configure = menu.Items.Add(T("Einstellungen…", "Settings…"), null, (_, _) => ShowSettings());
+        var check = menu.Items.Add(T("Nach Updates suchen", "Check for updates"), null,
+            async (_, _) => { if (updates != null) await updates.CheckAsync(requested: true); });
         menu.Items.Add(new ToolStripSeparator());
         exit = menu.Items.Add(T("Beenden", "Quit"), null, (_, _) => Shutdown());
         using var stream = GetResourceStream(new Uri("Assets/app.ico", UriKind.Relative)).Stream;
@@ -79,6 +83,9 @@ internal sealed class Program : Application
             status = T("Einstellungen konnten nicht geladen oder gespeichert werden. ", "Could not read or save settings. ") + ex.Message;
         }
         if (firstRun || status != null) ShowSettings();
+        updates = TrayUpdates.Start(() => settings.AutomaticUpdates, () => !running && editor == null,
+            message => tray.ShowBalloonTip(4500, "WinTabify", message, ToolTipIcon.Info));
+        check.Enabled = updates != null;
     }
 
     private void ShowSettings()
@@ -87,12 +94,14 @@ internal sealed class Program : Application
         if (editor != null) { editor.WindowState = WindowState.Normal; editor.Activate(); return; }
         editor = new(settings, next =>
         {
+            bool enableUpdates = !settings.AutomaticUpdates && next.AutomaticUpdates;
             if (!hotkey.TryApply(next.Shortcut, () => next.Save(SettingsFile))) return false;
             settings = next;
+            if (enableUpdates && updates != null) _ = updates.CheckAsync();
             status = null;
             return true;
         }, status);
-        editor.Closed += (_, _) => editor = null;
+        editor.Closed += (_, _) => { editor = null; updates?.ApplyWhenIdle(); };
         editor.Show();
     }
 
@@ -104,7 +113,7 @@ internal sealed class Program : Application
         try
         {
             var result = await ShellWorker.GatherAsync(settings.IncludeTabbed);
-            status = result.Created
+            status = result.Gathered
                 ? T($"{result.Locations} Tabs gesammelt. {result.Closed} Quellfenster geschlossen.",
                     $"Gathered {result.Locations} tabs. Closed {result.Closed} source windows.")
                 : T("Keine Fenster zum Zusammenführen.", "No windows to gather.");
@@ -124,11 +133,13 @@ internal sealed class Program : Application
         {
             running = false;
             gather.Enabled = configure.Enabled = exit.Enabled = true;
+            updates?.ApplyWhenIdle();
         }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        updates?.Dispose();
         hotkey.Dispose();
         tray.Visible = false;
         tray.ContextMenuStrip?.Dispose();

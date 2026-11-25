@@ -6,18 +6,31 @@ namespace WinTabify.Tests;
 public sealed class MergeTests
 {
     [Theory]
-    [InlineData(true, 3, 1)]
-    [InlineData(false, 2, 2)]
+    [InlineData(true, 2, 1)]
+    [InlineData(false, 1, 2)]
     public async Task GathersSelectedWindowsAndDeduplicatesLocations(bool includeTabbed, int closed, int remaining)
     {
-        var desktop = new Desktop(Window(1, "Work", "Photos"), Window(2, "Work"), Window(3, "Music"));
+        var group = Window(1, "Work", "Photos");
+        var desktop = new Desktop(group, Window(2, "Work"), Window(3, "Music"));
         var result = await new MergeService(desktop).GatherAsync(includeTabbed);
         Assert.Equal(closed, result.Closed);
         Assert.Equal(remaining, desktop.Windows.Count);
-        Assert.Equal(includeTabbed ? ["Work", "Photos", "Music"] : new[] { "Work", "Music" },
-            desktop.Windows.Last().Tabs.Select(t => t.Location));
-        if (!includeTabbed) Assert.Equal(2, desktop.Windows[0].Tabs.Count);
-        Assert.False((await new MergeService(desktop).GatherAsync(includeTabbed)).Created);
+        Assert.Equal(["Music"], desktop.OpenedTabs);
+        Assert.Equal(0, desktop.CreatedWindows);
+        if (includeTabbed) Assert.True(Assert.Single(desktop.Windows).ContainsExactly(["Work", "Photos", "Music"]));
+        else Assert.Contains(group, desktop.Windows);
+        Assert.False((await new MergeService(desktop).GatherAsync(includeTabbed)).Gathered);
+    }
+
+    [Fact]
+    public async Task EntirelyOverlappingSourceStillCloses()
+    {
+        var target = Window(1, "Work", "Photos", "Music");
+        var desktop = new Desktop(target, Window(2, "Photos", "Work", "Photos"), Window(3, "Music"));
+        var result = await new MergeService(desktop).GatherAsync(true);
+        Assert.Equal(2, result.Closed);
+        Assert.Empty(desktop.OpenedTabs);
+        Assert.Equal(target, Assert.Single(desktop.Windows));
     }
 
     [Fact]
@@ -26,6 +39,7 @@ public sealed class MergeTests
         var desktop = new Desktop(Window(1, "Work", "Work"));
         var result = await new MergeService(desktop).GatherAsync(true);
         Assert.Equal(1, result.Locations);
+        Assert.Equal(1, desktop.CreatedWindows);
         Assert.Single(Assert.Single(desktop.Windows).Tabs);
     }
 
@@ -38,9 +52,9 @@ public sealed class MergeTests
     }
 
     [Fact]
-    public async Task RejectsAnExistingWindowReturnedAsTheDestination()
+    public async Task RejectsAnExistingWindowReturnedAsANewDestination()
     {
-        var desktop = new Desktop(Window(1, "Work"), Window(2, "Music")) { ReuseSource = true };
+        var desktop = new Desktop(Window(1, "Work", "Work")) { ReuseSource = true };
         await Assert.ThrowsAsync<ExplorerChangedException>(() => new MergeService(desktop).GatherAsync(true));
         Assert.Equal(0, desktop.CloseAttempts);
     }
@@ -52,35 +66,37 @@ public sealed class MergeTests
         var desktop = new Desktop(incomplete, Window(2, "Music"));
         var result = await new MergeService(desktop).GatherAsync(true);
         Assert.Equal(1, result.Unreadable);
-        Assert.False(result.Created);
+        Assert.False(result.Gathered);
         Assert.Contains(incomplete, desktop.Windows);
     }
 
-    [Fact]
-    public async Task LeavesChangedSourceOpen()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task KeepsSourceWhenEitherWindowChanges(int changed)
     {
         var desktop = new Desktop(Window(1, "Work"), Window(2, "Music"));
-        desktop.BeforeClose = () => desktop.Windows[0] = Window(1, "Work", "New folder");
+        desktop.BeforeClose = () => desktop.Windows[changed - 1] = Window(changed, "New folder");
         var result = await new MergeService(desktop).GatherAsync(true);
         Assert.Equal(1, result.Kept);
-        Assert.Equal("New folder", desktop.Windows[0].Tabs[1].Location);
+        Assert.Equal(0, result.Closed);
     }
 
     [Fact]
-    public async Task LeavesRemainingSourcesWhenTargetChanges()
+    public void HandlesCanChangeWhenExplorerSelectsTheNextTab()
     {
-        var desktop = new Desktop(Window(1, "Work"), Window(2, "Music"));
-        desktop.BeforeClose = () => desktop.Windows[^1] = Window(99, "Different");
-        var result = await new MergeService(desktop).GatherAsync(true);
-        Assert.Equal(0, result.Closed);
-        Assert.Equal(2, result.Kept);
+        var original = Window(1, "A", "B", "C", "C");
+        var remaining = new ExplorerWindow(1, [new(478, "C"), new(491, "B")], true);
+        Assert.True(WindowsExplorerDesktop.IsVerifiedRemainder(remaining, original));
+        Assert.False(WindowsExplorerDesktop.IsVerifiedRemainder(Window(1, "B", "B"), original));
+        Assert.False(WindowsExplorerDesktop.IsVerifiedRemainder(Window(1, "New"), original));
     }
 
     [Fact]
     public async Task EmptyDesktopDoesNothing()
     {
         var desktop = new Desktop();
-        Assert.False((await new MergeService(desktop).GatherAsync(true)).Created);
+        Assert.False((await new MergeService(desktop).GatherAsync(true)).Gathered);
         Assert.Empty(desktop.Windows);
     }
 
@@ -90,25 +106,32 @@ public sealed class MergeTests
     private sealed class Desktop(params ExplorerWindow[] windows) : IExplorerDesktop
     {
         internal List<ExplorerWindow> Windows { get; } = [.. windows];
+        internal List<string> OpenedTabs { get; } = [];
         internal bool WrongDestination { get; init; }
         internal bool ReuseSource { get; init; }
         internal int CloseAttempts { get; private set; }
+        internal int CreatedWindows { get; private set; }
         internal Action? BeforeClose { get; set; }
 
         public IReadOnlyList<ExplorerWindow> ReadWindows() => Windows.ToList();
 
         public Task<ExplorerWindow> CreateWindowAsync(string firstLocation)
         {
+            CreatedWindows++;
             if (ReuseSource) return Task.FromResult(Windows[0]);
             var target = Window(99, firstLocation);
             Windows.Add(target);
             return Task.FromResult(target);
         }
 
-        public Task<ExplorerWindow> AddTabAsync(ExplorerWindow target, string location)
+        public Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations)
         {
-            var next = target with { Tabs = [.. target.Tabs, new(9900 + target.Tabs.Count, WrongDestination ? "Other" : location)] };
-            Windows[^1] = next;
+            OpenedTabs.AddRange(locations);
+            var tabs = target.Tabs.ToList();
+            foreach (var location in locations)
+                tabs.Add(new(11000 + tabs.Count, WrongDestination ? "Other" : location));
+            var next = target with { Tabs = tabs };
+            Windows[Windows.IndexOf(target)] = next;
             return Task.FromResult(next);
         }
 
@@ -117,8 +140,9 @@ public sealed class MergeTests
             CloseAttempts++;
             BeforeClose?.Invoke();
             BeforeClose = null;
+            var destination = Windows.Single(w => w.Handle == target.Handle);
             var current = Windows.Single(w => w.Handle == source.Handle);
-            return Task.FromResult(Windows[^1].Matches(target) && current.Matches(source) && Windows.Remove(current));
+            return Task.FromResult(destination.Matches(target) && current.Matches(source) && Windows.Remove(current));
         }
     }
 }

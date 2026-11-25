@@ -42,15 +42,16 @@ internal sealed class ShellViews : IDisposable
         var tabs = new List<ExplorerTab>(handles.Count);
         foreach (var handle in handles)
         {
-            if (!browsers.TryGetValue(handle, out var browser)) continue;
-            try
-            {
-                var location = GetLocation(browser);
-                if (location != null) tabs.Add(new(handle, location));
-            }
-            catch (Exception ex) when (IsUnavailable(ex)) { }
+            if (ReadTab(handle) is { } tab) tabs.Add(tab);
         }
         return new(frame, tabs, handles.Count > 0 && tabs.Count == handles.Count);
+    }
+
+    internal ExplorerTab? ReadTab(nint handle)
+    {
+        if (!browsers.TryGetValue(handle, out var browser)) return null;
+        try { return GetLocation(browser) is { } location ? new(handle, location) : null; }
+        catch (Exception ex) when (IsUnavailable(ex)) { return null; }
     }
 
     private static string? GetLocation(dynamic browser)
@@ -86,13 +87,6 @@ internal sealed class ShellViews : IDisposable
             !browsers.TryGetValue(tab.Handle, out var browser) || GetLocation(browser) != tab.Location)
             throw new ExplorerChangedException();
         ((dynamic)browser).Navigate2(location);
-    }
-
-    internal void CloseTab(ExplorerTab tab)
-    {
-        if (!browsers.TryGetValue(tab.Handle, out var browser) || GetLocation(browser) != tab.Location)
-            throw new ExplorerChangedException();
-        ((dynamic)browser).Quit();
     }
 
     public void Dispose()

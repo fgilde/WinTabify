@@ -29,10 +29,11 @@ internal sealed class TrayUpdates : IDisposable
 
     internal static TrayUpdates? Start(Func<bool> automatic, Func<bool> idle, Action<string> notify)
     {
-        string? channel = typeof(TrayUpdates).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(a => a.Key == "WinTabifyChannel")?.Value;
+        var metadata = typeof(TrayUpdates).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>();
+        string? channel = metadata.FirstOrDefault(a => a.Key == "WinTabifyChannel")?.Value;
         if (string.IsNullOrEmpty(channel)) return null;
-        var manager = new UpdateManager($"https://fgilde.github.io/WinTabify/downloads/{channel}/");
+        string root = metadata.Single(a => a.Key == "WinTabifyFeedRoot").Value!;
+        var manager = new UpdateManager($"{root.TrimEnd('/')}/{channel}/");
         if (!manager.IsInstalled) return null;
         var updates = new TrayUpdates(manager, automatic, idle, notify);
         _ = updates.CheckAsync();

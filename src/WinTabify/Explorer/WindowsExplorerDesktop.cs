@@ -86,6 +86,7 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         if (source.Handle == target.Handle) return false;
         try
         {
+            if (HasUnaccountedTabs(source)) return false;
             while (true)
             {
                 if (!NativeShell.IsWindowEnabled(source.Handle)) return false;
@@ -113,6 +114,14 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         {
             return !NativeShell.IsWindow(source.Handle);
         }
+    }
+
+    private static bool HasUnaccountedTabs(ExplorerWindow source)
+    {
+        var strip = AutomationElement.FromHandle(source.Handle).FindFirst(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Tab));
+        return strip != null && strip.FindAll(TreeScope.Descendants,
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)).Count > source.Tabs.Count;
     }
 
     private static async Task<bool> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target)

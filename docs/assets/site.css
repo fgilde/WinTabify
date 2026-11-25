@@ -596,3 +596,34 @@ footer {
     transition: none;
   }
 }
+
+.download-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 14px 0;
+  text-align: left;
+}
+.download-table caption {
+  text-align: left;
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+.download-table th,
+.download-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 7px 5px;
+}
+.download-table thead th {
+  font-size: 13px;
+}
+.download-table .download {
+  padding: 4px 9px;
+  font: 600 13px var(--mono);
+}
+.portable {
+  max-width: 44em;
+  font-size: 14px;
+}
+.portable ul {
+  padding-inline-start: 18px;
+}

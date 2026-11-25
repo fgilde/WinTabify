@@ -7,11 +7,13 @@
     <Description>Gather File Explorer windows into a single tab strip.</Description>
     <RepositoryUrl>https://github.com/fgilde/WinTabify</RepositoryUrl>
     <Version>0.2.0</Version>
+    <WinTabifyFeedRoot Condition="'$(WinTabifyFeedRoot)' == ''">https://fgilde.github.io/WinTabify/downloads/</WinTabifyFeedRoot>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Nextended.UI" Version="10.1.53" />
     <PackageReference Include="Velopack" Version="1.2.161" />
     <AssemblyMetadata Include="WinTabifyChannel" Value="$(WinTabifyChannel)" Condition="'$(WinTabifyChannel)' != ''" />
+    <AssemblyMetadata Include="WinTabifyFeedRoot" Value="$(WinTabifyFeedRoot)" />
     <Resource Include="Assets/app.ico" />
     <InternalsVisibleTo Include="WinTabify.Tests" />
   </ItemGroup>

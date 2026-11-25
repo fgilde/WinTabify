@@ -41,6 +41,12 @@ jobs:
       - name: Build and verify single-file app, installer and update feed
         shell: pwsh
         run: ./scripts/package.ps1 -Runtime ${{ matrix.runtime }} -Flavor ${{ matrix.flavor }} -Version "0.2.$env:GITHUB_RUN_NUMBER"
+      - name: Upgrade and restart a previous portable build
+        if: matrix.runtime == 'win-x64' && matrix.flavor == 'slim'
+        shell: pwsh
+        env:
+          RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: ./scripts/test-update.ps1 -Version "0.2.$env:GITHUB_RUN_NUMBER"
       - uses: actions/upload-artifact@v4
         with:
           name: downloads-${{ matrix.runtime }}-${{ matrix.flavor }}
@@ -71,3 +77,22 @@ jobs:
       - name: Deploy the bilingual site and update feeds
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify the published installers, portable downloads and updates
+        env:
+          SITE: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          base="${SITE%/}/downloads"
+          for runtime in win-x64 win-arm64; do
+            for flavor in bundled slim; do
+              channel="$runtime-$flavor"
+              feed="$base/$channel"
+              json=$(curl -fsSL --retry 5 --retry-all-errors "$feed/releases.$channel.json?run=$GITHUB_RUN_ID")
+              package=$(jq -er --arg v "0.2.$GITHUB_RUN_NUMBER" '.Assets[] | select(.Type == "Full" and .Version == $v) | .FileName' <<<"$json")
+              suffix=""
+              if [[ "$flavor" == slim ]]; then suffix="-slim"; fi
+              for file in "$feed/WinTabify-Setup.exe" "$feed/$package" "$base/WinTabify-$runtime$suffix.zip"; do
+                curl -fsSIL --retry 5 --retry-all-errors "$file?run=$GITHUB_RUN_ID" -o /dev/null
+              done
+            done
+          done

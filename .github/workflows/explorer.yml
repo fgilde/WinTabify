@@ -21,4 +21,4 @@ jobs:
           WINTABIFY_EXPLORER_TEST: '1'
         run: |
           Write-Host "Windows $([Environment]::OSVersion.Version), session $([Diagnostics.Process]::GetCurrentProcess().SessionId)"
-          dotnet test tests/WinTabify.Tests -c Release --filter FullyQualifiedName~ExplorerDesktopTests --logger "console;verbosity=normal"
+          dotnet test tests/WinTabify.Tests -c Release --filter FullyQualifiedName~ExplorerDesktopTests --logger "console;verbosity=detailed"

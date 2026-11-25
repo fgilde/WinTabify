@@ -37,7 +37,7 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
     {
         var directory = Directory.CreateTempSubdirectory("WinTabify-Scale-");
         var paths = Enumerable.Range(1, 20).Select(i =>
-            directory.CreateSubdirectory(i == 20 ? "Grüße #20 (100%25)" : $"Folder-{i:D2}").FullName).ToArray();
+            directory.CreateSubdirectory(i is 1 or 20 ? $"Grüße #{i:D2} (100%25)" : $"Folder-{i:D2}").FullName).ToArray();
         var desktop = new TestWindows(paths, output);
         try
         {

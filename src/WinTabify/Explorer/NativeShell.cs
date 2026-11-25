@@ -26,6 +26,25 @@ internal static class NativeShell
 
     internal static bool RequestWindowClose(nint frame) => PostMessage(frame, 0x0010, 0, 0);
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int SHParseDisplayName(string name, nint bindContext, out nint item, uint attributes, nint resultAttributes);
+
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    private static extern uint ILGetSize(nint item);
+
+    internal static object NavigationAddress(string location)
+    {
+        if (location.IndexOfAny(['#', '%']) < 0 || !Path.IsPathFullyQualified(location)) return location;
+        Marshal.ThrowExceptionForHR(SHParseDisplayName(location, 0, out var item, 0, 0));
+        try
+        {
+            var bytes = new byte[checked((int)ILGetSize(item))];
+            Marshal.Copy(item, bytes, 0, bytes.Length);
+            return bytes;
+        }
+        finally { Marshal.FreeCoTaskMem(item); }
+    }
+
     internal static List<nint> Frames()
     {
         var frames = new List<nint>();

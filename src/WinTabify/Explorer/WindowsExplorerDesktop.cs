@@ -256,11 +256,23 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         return current.Tabs.All(tab => locations.Remove(tab.Location));
     }
 
-    private static Task<ExplorerWindow> ConfirmAsync(ShellViews views, ExplorerWindow expected) => WaitAsync(() =>
+    private async Task<ExplorerWindow> ConfirmAsync(ShellViews views, ExplorerWindow expected)
     {
-        var current = views.Read(expected.Handle);
-        return current.Matches(expected) ? current : null;
-    });
+        ExplorerWindow? current = null;
+        try
+        {
+            return await WaitAsync(() =>
+            {
+                current = views.Read(expected.Handle);
+                return current.Matches(expected) ? current : null;
+            });
+        }
+        catch (ExplorerChangedException)
+        {
+            trace?.Invoke($"Expected [{string.Join(", ", expected.Tabs)}], observed [{string.Join(", ", current?.Tabs ?? [])}].");
+            throw;
+        }
+    }
 
     private static async Task<T> WaitAsync<T>(Func<T?> probe) where T : class
     {

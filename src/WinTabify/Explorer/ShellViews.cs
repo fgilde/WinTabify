@@ -61,8 +61,8 @@ internal sealed class ShellViews : IDisposable
     {
         if ((bool)browser.Busy) return null;
         string? url = browser.LocationURL;
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile &&
-            uri.Fragment.Length == 0 && uri.Query.Length == 0)
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile && uri.Fragment.Length == 0 &&
+            uri.Query.Length == 0 && uri.LocalPath.IndexOfAny(['#', '%']) < 0)
             return Path.TrimEndingDirectorySeparator(Path.GetFullPath(uri.LocalPath));
         object? document = null, folder = null, item = null;
         try
@@ -93,7 +93,7 @@ internal sealed class ShellViews : IDisposable
         if (NativeShell.GetAncestor(tab.Handle, 2) != frame ||
             Find(tab.Handle) is not { } browser || GetLocation(browser) != tab.Location)
             throw new ExplorerChangedException();
-        ((dynamic)browser).Navigate2(location);
+        ((dynamic)browser).Navigate2(NativeShell.NavigationAddress(location));
     }
 
     internal bool TryNavigateNewTab(nint frame, ExplorerTab tab)
@@ -102,7 +102,7 @@ internal sealed class ShellViews : IDisposable
         try
         {
             if (Find(tab.Handle) is not { } browser) return false;
-            ((dynamic)browser).Navigate2(tab.Location);
+            ((dynamic)browser).Navigate2(NativeShell.NavigationAddress(tab.Location));
             return true;
         }
         catch (COMException ex) when (ex.HResult is unchecked((int)0x80010001) or unchecked((int)0x8001010A))
@@ -117,14 +117,7 @@ internal sealed class ShellViews : IDisposable
         bool requested = false;
         foreach (var tab in source.Tabs.OrderBy(t => NativeShell.IsWindowVisible(t.Handle)))
         {
-            if (NativeShell.GetAncestor(tab.Handle, 2) != source.Handle ||
-                !browsers.TryGetValue(tab.Handle, out var browser)) continue;
-            try
-            {
-                if (GetLocation(browser) != tab.Location) continue;
-                ((dynamic)browser).Quit();
-                requested = true;
-            }
+            try { requested |= RequestTabClose(source.Handle, tab); }
             catch (Exception ex) when (IsUnavailable(ex)) { }
         }
         return requested || !NativeShell.IsWindow(source.Handle);

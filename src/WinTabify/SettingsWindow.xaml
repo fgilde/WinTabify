@@ -1,0 +1,33 @@
+<Window x:Class="WinTabify.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:nx="clr-namespace:Nextended.UI.WPF.Controls;assembly=Nextended.UI"
+        Title="WinTabify" Width="465" SizeToContent="Height" ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen" Background="#FBF7EF" Foreground="#291A29"
+        Icon="Assets/app.ico" FontFamily="Segoe UI" FontSize="14">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="16,7"/>
+      <Setter Property="MinHeight" Value="35"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+  </Window.Resources>
+  <StackPanel Margin="28,22,28,24">
+    <DockPanel>
+      <Image Width="50" Height="50" Source="Assets/app.ico" DockPanel.Dock="Left" Margin="0,0,11,0"/>
+      <TextBlock Text="WinTabify" FontSize="34" FontWeight="SemiBold" VerticalAlignment="Center"/>
+    </DockPanel>
+    <Separator Margin="0,16,0,12" Background="#BBAEA8"/>
+    <nx:KeyBindChanger x:Name="Recorder" CanRemoveBinding="False" CanEditMinTime="False"
+                       WithBorder="False" Focusable="True" KeyDown="RecorderKeyDown"/>
+    <TextBlock Name="Hint" TextWrapping="Wrap" Foreground="#604E57" FontSize="13" Margin="0,0,0,18"/>
+    <CheckBox Name="Include" VerticalContentAlignment="Center" FontWeight="SemiBold"/>
+    <TextBlock Name="Description" Margin="21,5,0,16" TextWrapping="Wrap" Foreground="#604E57" FontSize="13"/>
+    <TextBlock Name="Status" TextWrapping="Wrap" Foreground="#8C3419" AutomationProperties.LiveSetting="Polite"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button Name="CancelButton" IsCancel="True" Click="CancelClick" Background="Transparent" BorderBrush="#BBAEA8"/>
+      <Button Name="SaveButton" IsDefault="True" Click="SaveClick" Margin="8,0,0,0"
+              Background="#372039" Foreground="White" BorderBrush="#372039"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

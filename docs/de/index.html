@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#39273b" />
+    <meta
+      name="description"
+      content="Sammle offene Explorer-Fenster unter Windows 11 mit einem Tastenkürzel als eindeutige Ordner-Tabs. WinTabify herunterladen und einrichten."
+    />
+    <title>WinTabify — Viele Fenster. Ein Explorer.</title>
+    <link rel="icon" href="../assets/mark.png" />
+    <link rel="alternate" hreflang="en" href="../index.html" />
+    <link rel="alternate" hreflang="de" href="../de/index.html" />
+    <link rel="stylesheet" href="../assets/site.css" />
+    <script defer src="../assets/demo.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Zum Inhalt</a>
+    <header>
+      <nav class="wrap" aria-label="Hauptnavigation">
+        <a class="wordmark" href="#main"
+          ><img
+            src="../assets/mark.png"
+            width="38"
+            height="38"
+            alt=""
+          />WinTabify</a
+        >
+        <a class="jump" href="#install">Installation</a>
+        <a class="jump" href="#guide">Handbuch</a>
+        <a class="language" href="../index.html" hreflang="en" lang="en"
+          >English ↗</a
+        >
+      </nav>
+    </header>
+    <main id="main">
+      <div class="wrap hero">
+        <div>
+          <p class="eyebrow">Windows 11 / File Explorer</p>
+          <h1>Viele Fenster.<br /><em>Ein Explorer.</em></h1>
+          <p class="lede">
+            Ein Tastenkürzel sammelt deine offenen Ordner als Tabs. Im neuen
+            Explorer-Fenster hat jeder Ordner genau einen Platz.
+          </p>
+          <div class="actions">
+            <a class="action" href="#install"
+              >Für Windows laden <span aria-hidden="true">↓</span></a
+            >
+            <a class="textlink" href="#guide">Zum Handbuch</a>
+          </div>
+        </div>
+        <figure
+          class="plate"
+          data-demo
+          aria-label="Interaktives Ordnerbeispiel"
+        >
+          <figcaption class="platehead">
+            <span>Hier ausprobieren</span
+            ><span
+              class="state"
+              data-state
+              data-one="1 Fenster"
+              data-two="2 Fenster"
+              data-three="3 Fenster"
+              aria-live="polite"
+              >3 Fenster</span
+            >
+          </figcaption>
+          <div class="stage" aria-hidden="true">
+            <div class="card one">
+              <div class="rail"><i></i><span>Fenster 01</span></div>
+              <div class="tabs">
+                <span class="tab">Projekte</span
+                ><span class="tab">Downloads</span>
+              </div>
+            </div>
+            <div class="card two">
+              <div class="rail"><i></i><span>Fenster 02</span></div>
+              <div class="tabs"><span class="tab">Downloads</span></div>
+            </div>
+            <div class="card three">
+              <div class="rail"><i></i><span>Fenster 03</span></div>
+              <div class="tabs"><span class="tab">Bilder</span></div>
+            </div>
+            <div class="card result">
+              <div class="rail"><i></i><span>WinTabify</span></div>
+              <div class="tabs">
+                <span class="tab group-only">Projekte</span
+                ><span class="tab">Downloads</span
+                ><span class="tab">Bilder</span>
+              </div>
+            </div>
+          </div>
+          <div class="platefoot">
+            <label
+              ><input type="checkbox" checked /> Tab-Gruppen einbeziehen</label
+            ><button
+              class="example-button"
+              type="button"
+              data-gather="Beispiel sammeln"
+              data-reset="Zurücksetzen"
+            >
+              Beispiel sammeln
+            </button>
+          </div>
+          <noscript
+            ><p>
+              Aktiviere JavaScript, um das Beispiel auszuprobieren.
+            </p></noscript
+          >
+        </figure>
+      </div>
+
+      <section class="section" id="install">
+        <div class="wrap section-grid">
+          <div>
+            <p class="sectionno">Installation</p>
+            <h2>WinTabify einrichten.</h2>
+          </div>
+          <div>
+            <ol class="steps">
+              <li class="step">
+                <div>
+                  <h3>Download auswählen</h3>
+                  <p>
+                    Für Intel und AMD nimm x64, für einen Snapdragon-PC Arm64.
+                    Beide ZIP-Pakete enthalten die .NET-Laufzeit.
+                  </p>
+                  <div class="downloads">
+                    <a
+                      class="download"
+                      href="../downloads/WinTabify-win-x64.zip"
+                      download
+                      >Windows x64 <small>ZIP ↓</small></a
+                    >
+                    <a
+                      class="download"
+                      href="../downloads/WinTabify-win-arm64.zip"
+                      download
+                      >Windows Arm64 <small>ZIP ↓</small></a
+                    >
+                  </div>
+                </div>
+              </li>
+              <li class="step">
+                <div>
+                  <h3>Entpacken und starten</h3>
+                  <p>
+                    Entpacke das gesamte Archiv in einen festen Ordner und öffne
+                    <code>WinTabify.exe</code>. Das orange Ordnersymbol
+                    erscheint im Infobereich, gegebenenfalls unter dem kleinen
+                    Pfeil.
+                  </p>
+                </div>
+              </li>
+              <li class="step">
+                <div>
+                  <h3>Tastenkürzel ausprobieren</h3>
+                  <p>
+                    Beim ersten Start siehst du dein Tastenkürzel. Öffne zwei
+                    Explorer-Fenster mit unterschiedlichen Ordnern, schließe die
+                    Einstellungen und drücke die Kombination. Im Tray-Menü geht
+                    das auch über <strong>Explorer-Fenster sammeln</strong>.
+                  </p>
+                </div>
+              </li>
+            </ol>
+            <p class="compact">
+              Benötigt Windows 11 mit Explorer-Tabs (22H2 mit Tab-Update oder
+              neuer).
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="guide">
+        <div class="wrap section-grid">
+          <div>
+            <p class="sectionno">Handbuch</p>
+            <h2>Arbeiten mit Tabs.</h2>
+          </div>
+          <div>
+            <details class="doc" open>
+              <summary>Was passiert mit vorhandenen Tab-Gruppen?</summary>
+              <p>
+                Du hast ein Fenster mit drei Tabs und öffnest zwei weitere
+                Ordner in eigenen Fenstern. Die Einstellung im Tray bestimmt das
+                Ergebnis.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Gruppen einbeziehen</th>
+                    <th>Nach dem Sammeln</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>An (Standard)</td>
+                    <td>
+                      Ein Fenster mit je einem Tab für jeden unterschiedlichen
+                      Ordner aus allen drei Fenstern.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Aus</td>
+                    <td>
+                      Das ursprüngliche Fenster mit drei Tabs bleibt offen. Die
+                      beiden einzelnen Fenster bilden eine eigene Gruppe.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </details>
+            <details class="doc">
+              <summary>Wie ändere ich das Tastenkürzel?</summary>
+              <p>
+                Doppelklicke auf das Tray-Symbol, klicke auf das aktuelle
+                Kürzel, drücke die neue Kombination und speichere. Beim ersten
+                Start versucht WinTabify <kbd>Strg</kbd> + <kbd>Win</kbd> +
+                <kbd>E</kbd>, danach <kbd>Alt</kbd> + <kbd>Win</kbd> +
+                <kbd>E</kbd>, zuletzt <kbd>Strg</kbd> + <kbd>Umschalt</kbd> +
+                <kbd>F11</kbd>. Lehnt Windows eine Kombination ab, kannst du in
+                den Einstellungen eine andere wählen. Nach dem Schließen der
+                Einstellungen steht der Tray-Befehl zur Verfügung.
+              </p>
+            </details>
+            <details class="doc">
+              <summary>
+                Was passiert, wenn sich ein Fenster oder Ordner ändert?
+              </summary>
+              <p>
+                WinTabify prüft die Ordner im neuen Fenster und anschließend
+                jedes Quellfenster vor dem Schließen. Bei unlesbaren Tabs,
+                Änderungen oder einer Schließbestätigung kann ein Quellfenster
+                offen bleiben. Nach einem Abbruch kann auch das teilweise
+                gefüllte Zielfenster offen sein.
+              </p>
+              <p>
+                Neue Tabs öffnen den jeweiligen Ordner. Verlauf, Markierungen
+                und Scrollposition gehören zum ursprünglichen Tab.
+              </p>
+            </details>
+            <details class="doc">
+              <summary>Autostart und Deinstallation</summary>
+              <p>
+                Für den Autostart drücke Win + R, gib
+                <code>shell:startup</code> ein und lege dort eine Verknüpfung zu
+                <code>WinTabify.exe</code> ab. Zum Deinstallieren beende die App
+                über das Tray und entferne den entpackten Ordner sowie die
+                Autostart-Verknüpfung. Gespeicherte Einstellungen kannst du
+                unter <code>%LOCALAPPDATA%\WinTabify</code> löschen.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <div class="wrap foot">
+        <span
+          ><img src="../assets/mark.png" alt="" /> WinTabify · Florian
+          Gilde</span
+        ><a href="#main">Nach oben ↑</a>
+      </div>
+    </footer>
+  </body>
+</html>

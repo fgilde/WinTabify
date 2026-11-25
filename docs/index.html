@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#39273b" />
+    <meta
+      name="description"
+      content="Gather Windows 11 File Explorer windows into unique folder tabs with one shortcut. Download and set up WinTabify."
+    />
+    <title>WinTabify — Many windows. One Explorer.</title>
+    <link rel="icon" href="assets/mark.png" />
+    <link rel="alternate" hreflang="en" href="index.html" />
+    <link rel="alternate" hreflang="de" href="de/index.html" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <script defer src="assets/demo.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header>
+      <nav class="wrap" aria-label="Main navigation">
+        <a class="wordmark" href="#main"
+          ><img
+            src="assets/mark.png"
+            width="38"
+            height="38"
+            alt=""
+          />WinTabify</a
+        >
+        <a class="jump" href="#install">Installation</a>
+        <a class="jump" href="#guide">Guide</a>
+        <a class="language" href="de/index.html" hreflang="de" lang="de"
+          >Deutsch ↗</a
+        >
+      </nav>
+    </header>
+    <main id="main">
+      <div class="wrap hero">
+        <div>
+          <p class="eyebrow">Windows 11 / File Explorer</p>
+          <h1>Many windows.<br /><em>One Explorer.</em></h1>
+          <p class="lede">
+            Press one shortcut to gather your open folders into tabs. Each
+            folder gets one place in the new window.
+          </p>
+          <div class="actions">
+            <a class="action" href="#install"
+              >Download for Windows <span aria-hidden="true">↓</span></a
+            >
+            <a class="textlink" href="#guide">Read the guide</a>
+          </div>
+        </div>
+        <figure class="plate" data-demo aria-label="Interactive folder example">
+          <figcaption class="platehead">
+            <span>Try it here</span
+            ><span
+              class="state"
+              data-state
+              data-one="1 window"
+              data-two="2 windows"
+              data-three="3 windows"
+              aria-live="polite"
+              >3 windows</span
+            >
+          </figcaption>
+          <div class="stage" aria-hidden="true">
+            <div class="card one">
+              <div class="rail"><i></i><span>Window 01</span></div>
+              <div class="tabs">
+                <span class="tab">Projects</span
+                ><span class="tab">Downloads</span>
+              </div>
+            </div>
+            <div class="card two">
+              <div class="rail"><i></i><span>Window 02</span></div>
+              <div class="tabs"><span class="tab">Downloads</span></div>
+            </div>
+            <div class="card three">
+              <div class="rail"><i></i><span>Window 03</span></div>
+              <div class="tabs"><span class="tab">Pictures</span></div>
+            </div>
+            <div class="card result">
+              <div class="rail"><i></i><span>WinTabify</span></div>
+              <div class="tabs">
+                <span class="tab group-only">Projects</span
+                ><span class="tab">Downloads</span
+                ><span class="tab">Pictures</span>
+              </div>
+            </div>
+          </div>
+          <div class="platefoot">
+            <label><input type="checkbox" checked /> Include tab groups</label
+            ><button
+              class="example-button"
+              type="button"
+              data-gather="Gather example"
+              data-reset="Start again"
+            >
+              Gather example
+            </button>
+          </div>
+          <noscript
+            ><p>Enable JavaScript to run the interactive example.</p></noscript
+          >
+        </figure>
+      </div>
+
+      <section class="section" id="install">
+        <div class="wrap section-grid">
+          <div>
+            <p class="sectionno">Installation</p>
+            <h2>Set up WinTabify.</h2>
+          </div>
+          <div>
+            <ol class="steps">
+              <li class="step">
+                <div>
+                  <h3>Choose your download</h3>
+                  <p>
+                    Use x64 for Intel or AMD, Arm64 for a Snapdragon PC. Both
+                    ZIP packages include the .NET runtime.
+                  </p>
+                  <div class="downloads">
+                    <a
+                      class="download"
+                      href="downloads/WinTabify-win-x64.zip"
+                      download
+                      >Windows x64 <small>ZIP ↓</small></a
+                    >
+                    <a
+                      class="download"
+                      href="downloads/WinTabify-win-arm64.zip"
+                      download
+                      >Windows Arm64 <small>ZIP ↓</small></a
+                    >
+                  </div>
+                </div>
+              </li>
+              <li class="step">
+                <div>
+                  <h3>Extract and launch</h3>
+                  <p>
+                    Extract the entire archive into a permanent folder and open
+                    <code>WinTabify.exe</code>. Its orange folder icon appears
+                    in the notification area, sometimes under the small arrow.
+                  </p>
+                </div>
+              </li>
+              <li class="step">
+                <div>
+                  <h3>Try the shortcut</h3>
+                  <p>
+                    The first launch shows your shortcut. Open two Explorer
+                    windows at different folders, close settings and press the
+                    combination. You can also choose
+                    <strong>Gather Explorer windows</strong> in the tray menu.
+                  </p>
+                </div>
+              </li>
+            </ol>
+            <p class="compact">
+              Requires Windows 11 with Explorer tabs (22H2 with the tab update
+              or later).
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="guide">
+        <div class="wrap section-grid">
+          <div>
+            <p class="sectionno">Guide</p>
+            <h2>Working with tabs.</h2>
+          </div>
+          <div>
+            <details class="doc" open>
+              <summary>What happens to existing tab groups?</summary>
+              <p>
+                Say you have one window with three tabs and then open two more
+                folders in separate windows. The tray setting determines the
+                result.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Include groups</th>
+                    <th>After gathering</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>On (default)</td>
+                    <td>
+                      One window with a tab for each distinct folder from all
+                      three windows.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Off</td>
+                    <td>
+                      The original three-tab window stays open. The two single
+                      windows form their own group.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </details>
+            <details class="doc">
+              <summary>How do I change the shortcut?</summary>
+              <p>
+                Double-click the tray icon, click the current shortcut, press
+                the new keys together and save. At first launch WinTabify tries
+                <kbd>Ctrl</kbd> + <kbd>Win</kbd> + <kbd>E</kbd>, then
+                <kbd>Alt</kbd> + <kbd>Win</kbd> + <kbd>E</kbd>, then
+                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F11</kbd>. If Windows
+                declines a combination, choose another one in settings. The tray
+                command is always available once you close settings.
+              </p>
+            </details>
+            <details class="doc">
+              <summary>What if a folder or a window changes?</summary>
+              <p>
+                WinTabify checks the folders in the new window, then rechecks
+                each source before closing it. Unreadable tabs, a changed window
+                or a close confirmation can leave a source window open. An
+                interrupted merge can leave the partially filled destination
+                open, too.
+              </p>
+              <p>
+                New tabs reopen the folder location. Navigation history,
+                selection and scroll position belong to the original tab.
+              </p>
+            </details>
+            <details class="doc">
+              <summary>Start at sign-in or uninstall</summary>
+              <p>
+                For auto-start, press Win + R, enter
+                <code>shell:startup</code> and place a shortcut to
+                <code>WinTabify.exe</code> there. To uninstall, quit from the
+                tray and remove the extracted folder and startup shortcut. You
+                can delete saved preferences from
+                <code>%LOCALAPPDATA%\WinTabify</code>.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <div class="wrap foot">
+        <span
+          ><img src="assets/mark.png" alt="" /> WinTabify · Florian Gilde</span
+        ><a href="#main">Back to top ↑</a>
+      </div>
+    </footer>
+  </body>
+</html>

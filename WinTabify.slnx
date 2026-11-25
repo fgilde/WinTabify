@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/WinTabify/WinTabify.csproj" />
+  <Project Path="tests/WinTabify.Tests/WinTabify.Tests.csproj" />
+</Solution>

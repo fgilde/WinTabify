@@ -44,7 +44,6 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         if (!Read(target.Handle).Matches(target)) throw new ExplorerChangedException();
         var expected = target.Tabs.ToList();
         var known = expected.Select(t => t.Handle).ToHashSet();
-        var pending = new List<ExplorerTab>(locations.Count);
         foreach (var location in locations)
         {
             var handles = NativeShell.TabHandles(target.Handle);
@@ -56,25 +55,16 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 if (!known.IsSubsetOf(current) || current.Count > known.Count + 1)
                     throw new ExplorerChangedException();
                 if (current.Count == known.Count) return null;
-                return new ExplorerTab(current.Single(h => !known.Contains(h)), location);
+                nint handle = current.Single(h => !known.Contains(h));
+                using var views = new ShellViews();
+                var ready = views.ReadTab(handle);
+                if (ready == null) return null;
+                views.Navigate(target.Handle, ready, location);
+                return ready with { Location = location };
             });
             known.Add(added.Handle);
             expected.Add(added);
-            pending.Add(added);
         }
-        await WaitAsync(() =>
-        {
-            if (!known.SetEquals(NativeShell.TabHandles(target.Handle))) throw new ExplorerChangedException();
-            using var views = new ShellViews();
-            for (int i = pending.Count - 1; i >= 0; i--)
-            {
-                var request = pending[i];
-                if (views.ReadTab(request.Handle) is not { } ready) continue;
-                views.Navigate(target.Handle, ready, request.Location);
-                pending.RemoveAt(i);
-            }
-            return pending.Count == 0 ? target : null;
-        });
         return await ConfirmAsync(target with { Tabs = expected });
     }
 
@@ -192,8 +182,17 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                         return false;
                     }
                     if (first) initialTabIds.UnionWith(items.Select(TabId));
-                    if (!first && items.Length > 1 && CloseTabItems(items)) return true;
-                    if (first && current.Tabs.Count > 1)
+                    if (items.Length > 1)
+                    {
+                        var selected = items.FirstOrDefault(t => Equals(
+                            t.GetCurrentPropertyValue(SelectionItemPattern.IsSelectedProperty), true)) ?? items[0];
+                        if (CloseTabItems(items.Where(t => t != selected)))
+                        {
+                            trace?.Invoke($"Frame {source.Handle}: invoked tab strip close for {items.Length - 1} background tabs.");
+                            return true;
+                        }
+                    }
+                    if (current.Tabs.Count > 1)
                     {
                         var titleBar = root.FindFirst(TreeScope.Descendants,
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TitleBar));

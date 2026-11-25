@@ -44,27 +44,37 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         if (!Read(target.Handle).Matches(target)) throw new ExplorerChangedException();
         var expected = target.Tabs.ToList();
         var known = expected.Select(t => t.Handle).ToHashSet();
+        var pending = new List<ExplorerTab>(locations.Count);
         foreach (var location in locations)
         {
             var handles = NativeShell.TabHandles(target.Handle);
             if (!known.SetEquals(handles)) throw new ExplorerChangedException();
             RequestTab(target.Handle, handles);
-            var tab = await WaitAsync(() =>
+            var added = await WaitAsync(() =>
             {
                 var current = NativeShell.TabHandles(target.Handle);
                 if (!known.IsSubsetOf(current) || current.Count > known.Count + 1)
                     throw new ExplorerChangedException();
                 if (current.Count == known.Count) return null;
-                nint handle = current.Single(h => !known.Contains(h));
-                using var views = new ShellViews();
-                var added = views.ReadTab(handle);
-                if (added == null) return null;
-                views.Navigate(target.Handle, added, location);
-                return added with { Location = location };
+                return new ExplorerTab(current.Single(h => !known.Contains(h)), location);
             });
-            known.Add(tab.Handle);
-            expected.Add(tab);
+            known.Add(added.Handle);
+            expected.Add(added);
+            pending.Add(added);
         }
+        await WaitAsync(() =>
+        {
+            if (!known.SetEquals(NativeShell.TabHandles(target.Handle))) throw new ExplorerChangedException();
+            using var views = new ShellViews();
+            for (int i = pending.Count - 1; i >= 0; i--)
+            {
+                var request = pending[i];
+                if (views.ReadTab(request.Handle) is not { } ready) continue;
+                views.Navigate(target.Handle, ready, request.Location);
+                pending.RemoveAt(i);
+            }
+            return pending.Count == 0 ? target : null;
+        });
         return await ConfirmAsync(target with { Tabs = expected });
     }
 

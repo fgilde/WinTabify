@@ -8,11 +8,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: WinTabify-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   explorer:
     uses: ./.github/workflows/explorer.yml
 
-  build:
+  test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,31 +24,50 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - run: dotnet test WinTabify.slnx -c Release
-      - name: Build portable packages
+
+  package:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [win-x64, win-arm64]
+        flavor: [bundled, slim]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet tool restore
+      - name: Build and verify single-file app, installer and update feed
         shell: pwsh
-        run: |
-          ./scripts/package.ps1 -Runtime win-x64
-          ./scripts/package.ps1 -Runtime win-arm64
+        run: ./scripts/package.ps1 -Runtime ${{ matrix.runtime }} -Flavor ${{ matrix.flavor }} -Version "0.2.$env:GITHUB_RUN_NUMBER"
       - uses: actions/upload-artifact@v4
         with:
-          name: WinTabify-Windows
-          path: docs/downloads/*.zip
-      - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        with:
-          path: docs
+          name: downloads-${{ matrix.runtime }}-${{ matrix.flavor }}
+          path: docs/downloads/
+          compression-level: 0
 
   pages:
-    needs: [build, explorer]
+    needs: [test, package, explorer]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy the bilingual site
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: downloads-*
+          path: docs/downloads
+          merge-multiple: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy the bilingual site and update feeds
         id: deployment
         uses: actions/deploy-pages@v4

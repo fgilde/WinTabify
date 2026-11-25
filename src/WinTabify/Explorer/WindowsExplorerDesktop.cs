@@ -89,8 +89,7 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
             while (true)
             {
                 if (!NativeShell.IsWindowEnabled(source.Handle)) return false;
-                var closedTab = await RequestCloseAsync(source, target);
-                if (closedTab == null) return false;
+                if (!await RequestCloseAsync(source, target)) return false;
                 var timer = Stopwatch.StartNew();
                 while (NativeShell.IsWindow(source.Handle))
                 {
@@ -116,29 +115,25 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         }
     }
 
-    private static async Task<ExplorerTab?> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target)
+    private static async Task<bool> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target)
     {
         var timer = Stopwatch.StartNew();
         do
         {
-            if (!NativeShell.IsWindowEnabled(source.Handle)) return null;
+            if (!NativeShell.IsWindowEnabled(source.Handle)) return false;
             using (var views = new ShellViews())
             {
                 var destination = views.Read(target.Handle);
                 var current = views.Read(source.Handle);
                 if (destination.Complete && current.Complete)
                 {
-                    if (!destination.Matches(target) || !current.Matches(source)) return null;
-                    var tab = current.Tabs.FirstOrDefault(t => !NativeShell.IsWindowVisible(t.Handle)) ?? current.Tabs[0];
-                    if (current.Tabs.Count == 1)
-                        return NativeShell.PostMessage(source.Handle, 0x0010, 0, 0) ? tab : null;
-                    views.CloseTab(tab);
-                    return tab;
+                    if (!destination.Matches(target) || !current.Matches(source)) return false;
+                    return NativeShell.RequestWindowClose(source.Handle);
                 }
             }
             await Task.Delay(30);
         } while (timer.Elapsed < TimeSpan.FromSeconds(2));
-        return null;
+        return false;
     }
 
     internal static bool IsVerifiedRemainder(ExplorerWindow current, ExplorerWindow previous)

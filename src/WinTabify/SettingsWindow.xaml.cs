@@ -22,6 +22,8 @@ public partial class SettingsWindow : Window
         Hint.Text = T("Kürzel anklicken und die neue Kombination drücken.", "Click the shortcut and press the new combination.");
         Include.Content = T("Fenster mit mehreren Tabs einbeziehen", "Include windows with multiple tabs");
         Include.IsChecked = settings.IncludeTabbed;
+        AutoUpdate.Content = T("Updates automatisch installieren", "Install updates automatically");
+        AutoUpdate.IsChecked = settings.AutomaticUpdates;
         Description.Text = T("Ausgeschaltet bleiben bestehende Tab-Gruppen offen. Nur einzelne Fenster werden gesammelt.",
             "Turn this off to keep existing tab groups open and gather only single-tab windows.");
         Status.Text = status;
@@ -47,7 +49,7 @@ public partial class SettingsWindow : Window
         }
         try
         {
-            if (save(new(shortcut, Include.IsChecked == true))) { Close(); return; }
+            if (save(new(shortcut, Include.IsChecked == true, AutoUpdate.IsChecked == true))) { Close(); return; }
             Status.Text = T("Windows konnte dieses Kürzel nicht registrieren. Wähle eine andere Kombination.",
                 "Windows could not register this shortcut. Choose another combination.");
         }

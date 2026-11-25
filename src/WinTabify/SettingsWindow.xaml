@@ -23,6 +23,7 @@
     <TextBlock Name="Hint" TextWrapping="Wrap" Foreground="#604E57" FontSize="13" Margin="0,0,0,18"/>
     <CheckBox Name="Include" VerticalContentAlignment="Center" FontWeight="SemiBold"/>
     <TextBlock Name="Description" Margin="21,5,0,16" TextWrapping="Wrap" Foreground="#604E57" FontSize="13"/>
+    <CheckBox Name="AutoUpdate" Margin="0,0,0,12" VerticalContentAlignment="Center"/>
     <TextBlock Name="Status" TextWrapping="Wrap" Foreground="#8C3419" AutomationProperties.LiveSetting="Polite"/>
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
       <Button Name="CancelButton" IsCancel="True" Click="CancelClick" Background="Transparent" BorderBrush="#BBAEA8"/>

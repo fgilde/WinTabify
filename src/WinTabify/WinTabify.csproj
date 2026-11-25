@@ -6,10 +6,12 @@
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <Description>Gather File Explorer windows into a single tab strip.</Description>
     <RepositoryUrl>https://github.com/fgilde/WinTabify</RepositoryUrl>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Nextended.UI" Version="10.1.53" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+    <AssemblyMetadata Include="WinTabifyChannel" Value="$(WinTabifyChannel)" Condition="'$(WinTabifyChannel)' != ''" />
     <Resource Include="Assets/app.ico" />
     <InternalsVisibleTo Include="WinTabify.Tests" />
   </ItemGroup>

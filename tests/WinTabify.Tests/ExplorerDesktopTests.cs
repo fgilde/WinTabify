@@ -33,7 +33,7 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
         var directory = Directory.CreateTempSubdirectory("WinTabify-Test-");
         var paths = new[] { "Work", "Music", "Photos", "A", "B", "C", "D" }
             .Select(name => directory.CreateSubdirectory(name).FullName).ToArray();
-        var desktop = new TestWindows(paths);
+        var desktop = new TestWindows(paths, output);
         try
         {
             var group = await desktop.CreateWindowAsync(paths[0]);
@@ -78,7 +78,7 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
         }
     }
 
-    private sealed class TestWindows(string[] paths) : IExplorerDesktop
+    private sealed class TestWindows(string[] paths, ITestOutputHelper output) : IExplorerDesktop
     {
         private readonly WindowsExplorerDesktop desktop = new();
         private readonly HashSet<nint> owned = [];
@@ -101,12 +101,19 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             return desktop.AddTabsAsync(target, locations);
         }
 
-        public Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)
+        public async Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)
         {
             Assert.Contains(source.Handle, owned);
             Assert.Contains(target.Handle, owned);
             Assert.All(source.Tabs, tab => Assert.Contains(tab.Location, paths));
-            return desktop.CloseIfUnchangedAsync(source, target);
+            bool closed = await desktop.CloseIfUnchangedAsync(source, target);
+            if (!closed)
+            {
+                var remaining = ReadWindows().SingleOrDefault(w => w.Handle == source.Handle);
+                output.WriteLine($"Frame {source.Handle}: initially {source.Tabs.Count} tabs, now {remaining?.Tabs.Count}, " +
+                    $"enabled={NativeShell.IsWindowEnabled(source.Handle)}, complete={remaining?.Complete}.");
+            }
+            return closed;
         }
     }
 

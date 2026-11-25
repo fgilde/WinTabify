@@ -4,7 +4,7 @@ using WinTabify.Hotkeys;
 
 namespace WinTabify;
 
-internal sealed record Settings(Shortcut Shortcut, bool IncludeTabbed = true)
+internal sealed record Settings(Shortcut Shortcut, bool IncludeTabbed = true, bool AutomaticUpdates = true)
 {
     internal static Settings Default => new(Shortcut.Defaults[0]);
 

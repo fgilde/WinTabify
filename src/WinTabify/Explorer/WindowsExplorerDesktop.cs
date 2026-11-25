@@ -96,29 +96,37 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
         if (source.Handle == target.Handle) return false;
         try
         {
-            if (HasUnaccountedTabs(source)) return false;
-            while (true)
+            if (!await RequestCloseAsync(source, target)) return !NativeShell.IsWindow(source.Handle);
+            var quiet = Stopwatch.StartNew();
+            var limit = Stopwatch.StartNew();
+            int lastCount = source.Tabs.Count;
+            bool retried = false;
+            while (NativeShell.IsWindow(source.Handle))
             {
-                if (!NativeShell.IsWindowEnabled(source.Handle)) return false;
-                if (!await RequestCloseAsync(source, target)) return false;
-                var timer = Stopwatch.StartNew();
-                while (NativeShell.IsWindow(source.Handle))
+                int count = NativeShell.TabHandles(source.Handle).Count;
+                if (count != lastCount)
                 {
-                    if (timer.Elapsed >= TimeSpan.FromSeconds(4)) return false;
-                    if (NativeShell.TabHandles(source.Handle).Count < source.Tabs.Count)
+                    lastCount = count;
+                    quiet.Restart();
+                    retried = false;
+                }
+                if (count > 0 && !retried && quiet.ElapsedMilliseconds >= 550 && NativeShell.IsWindowEnabled(source.Handle))
+                {
+                    var remaining = Read(source.Handle);
+                    if (remaining.Matches(source) || IsVerifiedRemainder(remaining, source))
                     {
-                        var remaining = Read(source.Handle);
-                        if (remaining.Complete)
+                        if (await RequestCloseAsync(remaining, target))
                         {
-                            if (!IsVerifiedRemainder(remaining, source)) return false;
                             source = remaining;
-                            break;
+                            retried = true;
                         }
                     }
-                    await Task.Delay(25);
+                    quiet.Restart();
                 }
-                if (!NativeShell.IsWindow(source.Handle)) return true;
+                if (limit.Elapsed.TotalSeconds >= 7) return !NativeShell.IsWindow(source.Handle);
+                await Task.Delay(25);
             }
+            return true;
         }
         catch (Exception ex) when (ShellViews.IsUnavailable(ex) || ex is ElementNotAvailableException or ExplorerChangedException)
         {
@@ -146,7 +154,8 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
                 var current = views.Read(source.Handle);
                 if (destination.Complete && current.Complete)
                 {
-                    if (!destination.Matches(target) || !current.Matches(source)) return false;
+                    if (!destination.ContainsExactly(target.Tabs.Select(t => t.Location).ToArray()) ||
+                        !current.Matches(source) || HasUnaccountedTabs(current)) return false;
                     return NativeShell.RequestWindowClose(source.Handle);
                 }
             }

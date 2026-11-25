@@ -17,7 +17,11 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             var dispatcher = Dispatcher.CurrentDispatcher;
             dispatcher.InvokeAsync(async () =>
             {
-                try { await ExerciseExplorerAsync(); completion.SetResult(); }
+                try
+                {
+                    for (int i = 0; i < 3; i++) await ExerciseExplorerAsync();
+                    completion.SetResult();
+                }
                 catch (Exception ex) { completion.SetException(ex); }
                 finally { dispatcher.BeginInvokeShutdown(DispatcherPriority.Background); }
             });
@@ -107,11 +111,13 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             Assert.Contains(target.Handle, owned);
             Assert.All(source.Tabs, tab => Assert.Contains(tab.Location, paths));
             bool closed = await desktop.CloseIfUnchangedAsync(source, target);
-            if (!closed)
+            if (closed) owned.Remove(source.Handle);
+            else
             {
                 var remaining = ReadWindows().SingleOrDefault(w => w.Handle == source.Handle);
                 output.WriteLine($"Frame {source.Handle}: initially {source.Tabs.Count} tabs, now {remaining?.Tabs.Count}, " +
-                    $"enabled={NativeShell.IsWindowEnabled(source.Handle)}, complete={remaining?.Complete}.");
+                    $"enabled={NativeShell.IsWindowEnabled(source.Handle)}, complete={remaining?.Complete}, " +
+                    $"paths={string.Join(", ", remaining?.Tabs.Select(t => t.Location) ?? [])}.");
             }
             return closed;
         }

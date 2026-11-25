@@ -100,17 +100,18 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
             var quiet = Stopwatch.StartNew();
             var limit = Stopwatch.StartNew();
             int lastCount = source.Tabs.Count;
-            bool retried = false;
+            int attempts = 0;
             while (NativeShell.IsWindow(source.Handle))
             {
                 int count = NativeShell.TabHandles(source.Handle).Count;
                 if (count != lastCount)
                 {
+                    if (count < lastCount) limit.Restart();
                     lastCount = count;
                     quiet.Restart();
-                    retried = false;
+                    attempts = 0;
                 }
-                if (count > 0 && !retried && quiet.ElapsedMilliseconds >= 550 && NativeShell.IsWindowEnabled(source.Handle))
+                if (count > 0 && attempts < 3 && quiet.ElapsedMilliseconds >= 250 && NativeShell.IsWindowEnabled(source.Handle))
                 {
                     var remaining = Read(source.Handle);
                     if (remaining.Matches(source) || IsVerifiedRemainder(remaining, source))
@@ -118,7 +119,7 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
                         if (await RequestCloseAsync(remaining, target))
                         {
                             source = remaining;
-                            retried = true;
+                            attempts++;
                         }
                     }
                     quiet.Restart();
@@ -156,7 +157,7 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
                 {
                     if (!destination.ContainsExactly(target.Tabs.Select(t => t.Location).ToArray()) ||
                         !current.Matches(source) || HasUnaccountedTabs(current)) return false;
-                    return NativeShell.RequestWindowClose(source.Handle);
+                    return views.RequestClose(current);
                 }
             }
             await Task.Delay(30);

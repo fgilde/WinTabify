@@ -89,6 +89,25 @@ internal sealed class ShellViews : IDisposable
         ((dynamic)browser).Navigate2(location);
     }
 
+    internal bool RequestClose(ExplorerWindow source)
+    {
+        if (source.Tabs.Count == 1) return NativeShell.RequestWindowClose(source.Handle);
+        bool requested = false;
+        foreach (var tab in source.Tabs.OrderBy(t => NativeShell.IsWindowVisible(t.Handle)))
+        {
+            if (NativeShell.GetAncestor(tab.Handle, 2) != source.Handle ||
+                !browsers.TryGetValue(tab.Handle, out var browser)) continue;
+            try
+            {
+                if (GetLocation(browser) != tab.Location) continue;
+                ((dynamic)browser).Quit();
+                requested = true;
+            }
+            catch (Exception ex) when (IsUnavailable(ex)) { }
+        }
+        return requested || !NativeShell.IsWindow(source.Handle);
+    }
+
     public void Dispose()
     {
         foreach (var browser in browsers.Values) Marshal.ReleaseComObject(browser);

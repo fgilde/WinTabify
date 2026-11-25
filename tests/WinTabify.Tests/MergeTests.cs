@@ -113,7 +113,7 @@ public sealed class MergeTests
         internal int CreatedWindows { get; private set; }
         internal Action? BeforeClose { get; set; }
 
-        public IReadOnlyList<ExplorerWindow> ReadWindows() => Windows.ToList();
+        public IReadOnlyList<ExplorerWindow> ReadWindows(bool includeTabbed = true) => Windows.ToList();
 
         public Task<ExplorerWindow> CreateWindowAsync(string firstLocation)
         {

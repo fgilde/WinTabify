@@ -9,10 +9,12 @@ internal sealed class ShellViews : IDisposable
         Type.GetTypeFromCLSID(new Guid("9BA05972-F6A8-11CF-A442-00A0C90A8F39"), true)!)!;
     private readonly Dictionary<nint, object> browsers = [];
     private bool indexed;
+    private long lastMiss;
 
     private object? Find(nint handle)
     {
         if (browsers.TryGetValue(handle, out var cached)) return cached;
+        if (lastMiss != 0 && Environment.TickCount64 - lastMiss < 16) return null;
         dynamic windows = collection;
         int count = windows.Count;
         for (int i = count - 1; i >= 0; i--)
@@ -31,6 +33,7 @@ internal sealed class ShellViews : IDisposable
             finally { if (browser != null) Marshal.ReleaseComObject(browser); }
         }
         indexed = true;
+        if (!browsers.ContainsKey(handle)) lastMiss = Environment.TickCount64;
         return browsers.GetValueOrDefault(handle);
     }
 

@@ -36,7 +36,8 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
     private async Task ExerciseTwentyWindowsAsync()
     {
         var directory = Directory.CreateTempSubdirectory("WinTabify-Scale-");
-        var paths = Enumerable.Range(1, 20).Select(i => directory.CreateSubdirectory($"Folder-{i:D2}").FullName).ToArray();
+        var paths = Enumerable.Range(1, 20).Select(i =>
+            directory.CreateSubdirectory(i == 20 ? "Grüße #20 (100%25)" : $"Folder-{i:D2}").FullName).ToArray();
         var desktop = new TestWindows(paths, output);
         try
         {
@@ -119,10 +120,10 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
         internal long ScanMs { get; private set; }
         internal long TabsMs { get; private set; }
 
-        public IReadOnlyList<ExplorerWindow> ReadWindows()
+        public IReadOnlyList<ExplorerWindow> ReadWindows(bool includeTabbed = true)
         {
             var timer = Stopwatch.StartNew();
-            var windows = desktop.ReadWindows().Where(w => owned.Contains(w.Handle)).ToArray();
+            var windows = desktop.ReadWindows(includeTabbed).Where(w => owned.Contains(w.Handle)).ToArray();
             if (Measure) ScanMs += timer.ElapsedMilliseconds;
             return windows;
         }

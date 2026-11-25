@@ -15,7 +15,7 @@ internal sealed record ExplorerWindow(nint Handle, IReadOnlyList<ExplorerTab> Ta
 
 internal interface IExplorerDesktop
 {
-    IReadOnlyList<ExplorerWindow> ReadWindows();
+    IReadOnlyList<ExplorerWindow> ReadWindows(bool includeTabbed = true);
     Task<ExplorerWindow> CreateWindowAsync(string firstLocation);
     Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations);
     Task<int> CloseSourcesAsync(IReadOnlyList<ExplorerWindow> sources, ExplorerWindow target);

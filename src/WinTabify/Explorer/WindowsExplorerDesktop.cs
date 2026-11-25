@@ -7,10 +7,18 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
 {
     private static readonly TimeSpan NavigationTimeout = TimeSpan.FromSeconds(12);
 
-    public IReadOnlyList<ExplorerWindow> ReadWindows()
+    public IReadOnlyList<ExplorerWindow> ReadWindows(bool includeTabbed = true)
     {
         using var views = new ShellViews();
-        return NativeShell.Frames().Select(views.Read).ToList();
+        var windows = NativeShell.Frames().Select(views.Read);
+        return (includeTabbed ? windows : windows.Where(IsSingleTabWindow)).ToList();
+    }
+
+    private static bool IsSingleTabWindow(ExplorerWindow window)
+    {
+        if (!window.Complete || window.Tabs.Count != 1) return false;
+        try { return ReadTabItems(AutomationElement.FromHandle(window.Handle)).Length == 1; }
+        catch (Exception ex) when (ShellViews.IsUnavailable(ex) || ex is ElementNotAvailableException) { return false; }
     }
 
     public async Task<ExplorerWindow> CreateWindowAsync(string firstLocation)
@@ -47,7 +55,7 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         if (!views.Read(target.Handle).Matches(target)) throw new ExplorerChangedException();
         var expected = target.Tabs.ToList();
         var known = expected.Select(t => t.Handle).ToHashSet();
-        foreach (var batch in locations.Chunk(4))
+        foreach (var batch in locations.Chunk(8))
         {
             var handles = NativeShell.TabHandles(target.Handle);
             if (!known.SetEquals(handles)) throw new ExplorerChangedException();
@@ -90,15 +98,19 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
     {
         if (sources.Count == 0) return 0;
         var byLocation = target.Tabs.ToDictionary(t => t.Location, FolderLocationComparer.Instance);
-        int chunkSize = (sources.Count + 3) / 4;
-        var workers = sources.Chunk(chunkSize).Select(group => ShellWorker.RunAsync(async () =>
+        var singles = sources.Where(w => w.Tabs.Count == 1).ToArray();
+        int chunkSize = Math.Max(1, (singles.Length + 3) / 4);
+        var workers = singles.Chunk(chunkSize).Select(group => ShellWorker.RunAsync(() => CloseGroupAsync(group))).ToList();
+        workers.Add(CloseGroupAsync(sources.Where(w => w.Tabs.Count > 1)));
+        return (await Task.WhenAll(workers)).Sum();
+
+        async Task<int> CloseGroupAsync(IEnumerable<ExplorerWindow> group)
         {
             using var views = new ShellViews();
             var results = await Task.WhenAll(group.Select(source =>
                 CloseIfUnchangedAsync(source, target, byLocation, views)));
             return results.Count(closed => closed);
-        }));
-        return (await Task.WhenAll(workers)).Sum();
+        }
     }
 
     private async Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target,

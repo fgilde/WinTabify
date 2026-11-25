@@ -4,7 +4,7 @@ internal sealed class MergeService(IExplorerDesktop desktop)
 {
     internal async Task<MergeResult> GatherAsync(bool includeTabbed)
     {
-        var windows = desktop.ReadWindows();
+        var windows = desktop.ReadWindows(includeTabbed);
         var sources = windows.Where(w => w.Complete && (includeTabbed || w.Tabs.Count == 1)).ToList();
         var comparer = FolderLocationComparer.Instance;
         var locations = sources.SelectMany(w => w.Tabs).Select(t => t.Location).Distinct(comparer).ToList();

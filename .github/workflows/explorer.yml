@@ -1,12 +1,7 @@
 name: Explorer desktop test
 on:
+  workflow_call:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/explorer.yml'
-      - 'src/WinTabify/Explorer/**'
-      - 'tests/WinTabify.Tests/ExplorerDesktopTests.cs'
 
 permissions:
   contents: read

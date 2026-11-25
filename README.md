@@ -35,7 +35,7 @@ dotnet run --project src/WinTabify
 
 Packages appear in `docs/downloads`. The site is plain HTML, CSS and JavaScript. Open `docs/index.html` for English or `docs/de/index.html` for German. To publish, select **GitHub Actions** under **Settings → Pages** in the repository. The workflow tests the project, produces both self-contained packages and deploys the site with its downloads on pushes to `main`.
 
-The interactive integration test opens its own temporary Explorer windows and exercises both modes. Run it on an unlocked Windows 11 desktop with Explorer tabs. If Explorer prompts before closing several tabs, confirm the test windows' close requests.
+The integration test opens its own temporary Explorer windows and exercises both modes on a Windows 11 Arm64 runner. Publishing requires a successful desktop test and package build. To repeat the desktop test locally, use an unlocked Windows 11 desktop with Explorer tabs.
 
 ```powershell
 $env:WINTABIFY_EXPLORER_TEST = '1'

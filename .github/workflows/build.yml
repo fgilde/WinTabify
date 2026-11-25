@@ -9,6 +9,9 @@ permissions:
   contents: read
 
 jobs:
+  explorer:
+    uses: ./.github/workflows/explorer.yml
+
   build:
     runs-on: windows-latest
     steps:
@@ -32,7 +35,7 @@ jobs:
           path: docs
 
   pages:
-    needs: build
+    needs: [build, explorer]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

@@ -1,10 +1,12 @@
 using System.Windows.Threading;
+using System.Windows.Automation;
 using WinTabify.Explorer;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace WinTabify.Tests;
 
-public sealed class ExplorerDesktopTests
+public sealed class ExplorerDesktopTests(ITestOutputHelper output)
 {
     [InteractiveExplorerFact]
     public Task GathersOnlyTestWindowsInBothModes()
@@ -26,7 +28,7 @@ public sealed class ExplorerDesktopTests
         return completion.Task;
     }
 
-    private static async Task ExerciseExplorerAsync()
+    private async Task ExerciseExplorerAsync()
     {
         var directory = Directory.CreateTempSubdirectory("WinTabify-Test-");
         var paths = new[] { "Work", "Music", "Photos" }
@@ -45,6 +47,20 @@ public sealed class ExplorerDesktopTests
             Assert.Equal(2, desktop.ReadWindows().Count);
             Assert.Contains(desktop.ReadWindows(), w => w.Handle == group.Handle);
             var second = await service.GatherAsync(true);
+            if (second.Closed != 2)
+            {
+                output.WriteLine(second.ToString());
+                foreach (var window in desktop.ReadWindows())
+                {
+                    var root = AutomationElement.FromHandle(window.Handle);
+                    var items = root.FindAll(TreeScope.Descendants, new PropertyCondition(
+                        AutomationElement.ControlTypeProperty, ControlType.TabItem));
+                    output.WriteLine($"Frame {window.Handle}: enabled={NativeShell.IsWindowEnabled(window.Handle)}, " +
+                        $"complete={window.Complete}, shell tabs={window.Tabs.Count}, accessible tabs={items.Count}");
+                    foreach (AutomationElement element in items)
+                        output.WriteLine($"  Tab: {element.Current.Name} ({element.Current.AutomationId})");
+                }
+            }
             Assert.Equal(2, second.Closed);
             Assert.True(Assert.Single(desktop.ReadWindows()).ContainsExactly(paths));
         }

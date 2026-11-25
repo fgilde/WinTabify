@@ -79,6 +79,33 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
 
     public async Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)
     {
+        while (source.Tabs.Count > 0)
+        {
+            if (!RequestClose(source, target)) return false;
+            var timer = Stopwatch.StartNew();
+            while (timer.Elapsed < TimeSpan.FromSeconds(4))
+            {
+                if (!NativeShell.IsWindow(source.Handle)) return true;
+                if (NativeShell.TabHandles(source.Handle).Count < source.Tabs.Count)
+                {
+                    var remaining = Read(source.Handle);
+                    if (remaining.Complete)
+                    {
+                        if (remaining.Tabs.Count != source.Tabs.Count - 1 || !remaining.Tabs.All(source.Tabs.Contains))
+                            return false;
+                        source = remaining;
+                        break;
+                    }
+                }
+                await Task.Delay(75);
+            }
+            if (timer.Elapsed >= TimeSpan.FromSeconds(4)) return !NativeShell.IsWindow(source.Handle);
+        }
+        return false;
+    }
+
+    private static bool RequestClose(ExplorerWindow source, ExplorerWindow target)
+    {
         if (source.Handle == target.Handle || !NativeShell.IsWindowEnabled(source.Handle)) return false;
         var root = AutomationElement.FromHandle(source.Handle);
         var strip = root.FindFirst(TreeScope.Descendants,
@@ -89,16 +116,13 @@ internal sealed class WindowsExplorerDesktop : IExplorerDesktop
                 new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)).Count;
             if (count > 0 && count != source.Tabs.Count) return false;
         }
-        using (var latest = new ShellViews())
-        {
-            if (!latest.Read(target.Handle).Matches(target) || !latest.Read(source.Handle).Matches(source))
-                return false;
-            if (!NativeShell.PostMessage(source.Handle, 0x0010, 0, 0)) return false;
-        }
-        var timer = Stopwatch.StartNew();
-        while (NativeShell.IsWindow(source.Handle) && timer.Elapsed < TimeSpan.FromSeconds(2))
-            await Task.Delay(75);
-        return !NativeShell.IsWindow(source.Handle);
+        using var latest = new ShellViews();
+        if (!latest.Read(target.Handle).Matches(target) || !latest.Read(source.Handle).Matches(source))
+            return false;
+        if (source.Tabs.Count == 1) return NativeShell.PostMessage(source.Handle, 0x0010, 0, 0);
+        var selected = source.Tabs.FirstOrDefault(t => NativeShell.IsWindowVisible(t.Handle));
+        latest.CloseTab(selected ?? source.Tabs[0]);
+        return true;
     }
 
     private static ExplorerWindow Read(nint frame)

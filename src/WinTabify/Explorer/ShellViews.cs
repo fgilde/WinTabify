@@ -88,6 +88,13 @@ internal sealed class ShellViews : IDisposable
         ((dynamic)browser).Navigate2(location);
     }
 
+    internal void CloseTab(ExplorerTab tab)
+    {
+        if (!browsers.TryGetValue(tab.Handle, out var browser) || GetLocation(browser) != tab.Location)
+            throw new ExplorerChangedException();
+        ((dynamic)browser).Quit();
+    }
+
     public void Dispose()
     {
         foreach (var browser in browsers.Values) Marshal.ReleaseComObject(browser);

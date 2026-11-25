@@ -96,7 +96,8 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         if (source.Handle == target.Handle) return false;
         try
         {
-            if (!await RequestCloseAsync(source, target, true)) return !NativeShell.IsWindow(source.Handle);
+            var initialTabIds = new HashSet<string>(StringComparer.Ordinal);
+            if (!await RequestCloseAsync(source, target, initialTabIds, true)) return !NativeShell.IsWindow(source.Handle);
             var quiet = Stopwatch.StartNew();
             var limit = Stopwatch.StartNew();
             int lastCount = source.Tabs.Count;
@@ -116,7 +117,7 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                     var remaining = Read(source.Handle);
                     if (remaining.Matches(source) || IsVerifiedRemainder(remaining, source))
                     {
-                        if (await RequestCloseAsync(remaining, target, false))
+                        if (await RequestCloseAsync(remaining, target, initialTabIds, false))
                         {
                             source = remaining;
                             attempts++;
@@ -137,15 +138,37 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         }
     }
 
-    private static int? AccessibleTabCount(AutomationElement root)
+    private static AutomationElement[] ReadTabItems(AutomationElement root)
     {
         var strip = root.FindFirst(TreeScope.Descendants,
             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Tab));
-        return strip?.FindAll(TreeScope.Descendants,
-            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem)).Count;
+        return strip?.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty,
+            ControlType.TabItem)).Cast<AutomationElement>().ToArray() ?? [];
     }
 
-    private async Task<bool> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target, bool first)
+    private static string TabId(AutomationElement tab) => string.Join(".", tab.GetRuntimeId());
+
+    private static bool CloseTabItems(IEnumerable<AutomationElement> tabs)
+    {
+        bool requested = false;
+        foreach (var tab in tabs)
+        {
+            try
+            {
+                var close = tab.FindFirst(TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.AutomationIdProperty, "CloseButton"));
+                if (close == null || !close.TryGetCurrentPattern(InvokePattern.Pattern, out var action)) continue;
+                ((InvokePattern)action).Invoke();
+                requested = true;
+            }
+            catch (ElementNotAvailableException) { }
+            catch (ElementNotEnabledException) { }
+        }
+        return requested;
+    }
+
+    private async Task<bool> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target,
+        HashSet<string> initialTabIds, bool first)
     {
         var timer = Stopwatch.StartNew();
         do
@@ -158,14 +181,18 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 if (destination.Complete && current.Complete)
                 {
                     var root = AutomationElement.FromHandle(source.Handle);
-                    var accessible = AccessibleTabCount(root);
+                    var items = ReadTabItems(root);
                     bool retained = destination.ContainsExactly(target.Tabs.Select(t => t.Location).ToArray());
                     bool same = current.Matches(source);
-                    if (!retained || !same || accessible > current.Tabs.Count)
+                    bool known = first ? items.Length <= current.Tabs.Count :
+                        items.All(tab => initialTabIds.Contains(TabId(tab)));
+                    if (!retained || !same || !known)
                     {
-                        trace?.Invoke($"Frame {source.Handle}: destination={retained}, source={same}, accessible={accessible}, native={current.Tabs.Count}.");
+                        trace?.Invoke($"Frame {source.Handle}: destination={retained}, source={same}, known={known}, accessible={items.Length}, native={current.Tabs.Count}.");
                         return false;
                     }
+                    if (first) initialTabIds.UnionWith(items.Select(TabId));
+                    if (!first && items.Length > 1 && CloseTabItems(items)) return true;
                     if (first && current.Tabs.Count > 1)
                     {
                         var titleBar = root.FindFirst(TreeScope.Descendants,

@@ -58,7 +58,8 @@ internal sealed class ShellViews : IDisposable
     {
         if ((bool)browser.Busy) return null;
         string? url = browser.LocationURL;
-        if (!string.IsNullOrEmpty(url) && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile)
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile &&
+            uri.Fragment.Length == 0 && uri.Query.Length == 0)
             return Path.TrimEndingDirectorySeparator(Path.GetFullPath(uri.LocalPath));
         object? document = null, folder = null, item = null;
         try
@@ -124,6 +125,14 @@ internal sealed class ShellViews : IDisposable
             catch (Exception ex) when (IsUnavailable(ex)) { }
         }
         return requested || !NativeShell.IsWindow(source.Handle);
+    }
+
+    internal bool RequestTabClose(nint frame, ExplorerTab tab)
+    {
+        if (NativeShell.GetAncestor(tab.Handle, 2) != frame || Find(tab.Handle) is not { } browser ||
+            GetLocation(browser) != tab.Location) return false;
+        ((dynamic)browser).Quit();
+        return true;
     }
 
     public void Dispose()

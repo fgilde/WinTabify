@@ -25,11 +25,13 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 Arguments = $"/n,\"{marker.FullName}\"",
                 UseShellExecute = false
             });
-            var window = await WaitAsync(() => ReadWindows().FirstOrDefault(w => !previous.Contains(w.Handle) &&
-                w.Complete && w.Tabs.Count == 1 && string.Equals(w.Tabs[0].Location, marker.FullName, StringComparison.OrdinalIgnoreCase)));
+            using var views = new ShellViews();
+            var window = await WaitAsync(() => NativeShell.Frames().Where(h => !previous.Contains(h)).Select(views.Read)
+                .FirstOrDefault(w => w.Complete && w.Tabs.Count == 1 &&
+                    string.Equals(w.Tabs[0].Location, marker.FullName, StringComparison.OrdinalIgnoreCase)));
             var tab = window.Tabs[0];
-            using (var views = new ShellViews()) views.Navigate(window.Handle, tab, firstLocation);
-            return await ConfirmAsync(window with { Tabs = [tab with { Location = firstLocation }] });
+            views.Navigate(window.Handle, tab, firstLocation);
+            return await ConfirmAsync(views, window with { Tabs = [tab with { Location = firstLocation }] });
         }
         finally
         {
@@ -68,12 +70,7 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 return assigned == batch.Length && pending.Count == 0 ? target : null;
             });
         }
-        var destination = target with { Tabs = expected };
-        return await WaitAsync(() =>
-        {
-            var current = views.Read(target.Handle);
-            return current.Matches(destination) ? current : null;
-        });
+        return await ConfirmAsync(views, target with { Tabs = expected });
     }
 
     private static void RequestTab(nint frame, List<nint> handles)
@@ -97,7 +94,6 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         var workers = sources.Chunk(chunkSize).Select(group => ShellWorker.RunAsync(async () =>
         {
             using var views = new ShellViews();
-            if (!views.Read(target.Handle).Matches(target)) return 0;
             var results = await Task.WhenAll(group.Select(source =>
                 CloseIfUnchangedAsync(source, target, byLocation, views)));
             return results.Count(closed => closed);
@@ -149,7 +145,7 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         }
         catch (Exception ex) when (ShellViews.IsUnavailable(ex) || ex is ElementNotAvailableException or ExplorerChangedException)
         {
-            trace?.Invoke($"Frame {source.Handle}: {ex.GetType().Name} {ex.Message}");
+            trace?.Invoke($"Frame {source.Handle}: {ex}");
             return !NativeShell.IsWindow(source.Handle);
         }
     }
@@ -193,14 +189,17 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
             var current = views.Read(source.Handle);
             if (current.Complete)
             {
-                var root = AutomationElement.FromHandle(source.Handle);
-                var items = ReadTabItems(root);
                 bool retained = required.All(t => NativeShell.GetAncestor(t.Handle, 2) == target.Handle &&
                     views.ReadTab(t.Handle) == t);
                 bool same = current.Matches(source);
+                if (!retained || !same) return false;
+                if (source.Tabs.Count == 1 && initialTabIds.Count == 0)
+                    return views.RequestTabClose(source.Handle, source.Tabs[0]);
+                var root = AutomationElement.FromHandle(source.Handle);
+                var items = ReadTabItems(root);
                 bool known = first ? items.Length <= current.Tabs.Count :
                     items.All(tab => initialTabIds.Contains(TabId(tab)));
-                if (!retained || !same || !known)
+                if (!known)
                 {
                     trace?.Invoke($"Frame {source.Handle}: destination={retained}, source={same}, known={known}, accessible={items.Length}, native={current.Tabs.Count}.");
                     return false;
@@ -245,15 +244,9 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         return current.Tabs.All(tab => locations.Remove(tab.Location));
     }
 
-    private static ExplorerWindow Read(nint frame)
+    private static Task<ExplorerWindow> ConfirmAsync(ShellViews views, ExplorerWindow expected) => WaitAsync(() =>
     {
-        using var views = new ShellViews();
-        return views.Read(frame);
-    }
-
-    private static Task<ExplorerWindow> ConfirmAsync(ExplorerWindow expected) => WaitAsync(() =>
-    {
-        var current = Read(expected.Handle);
+        var current = views.Read(expected.Handle);
         return current.Matches(expected) ? current : null;
     });
 

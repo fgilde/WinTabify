@@ -1,6 +1,5 @@
 using System.Windows.Threading;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using WinTabify.Explorer;
 using Xunit;
 using Xunit.Abstractions;
@@ -20,7 +19,6 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             {
                 try
                 {
-                    await ProbeShellVerbAsync();
                     await ExerciseTwentyWindowsAsync();
                     for (int i = 0; i < 3; i++) await ExerciseExplorerAsync();
                     completion.SetResult();
@@ -34,72 +32,6 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
         thread.Start();
         return completion.Task;
     }
-
-    private async Task ProbeShellVerbAsync()
-    {
-        var dir = Directory.CreateTempSubdirectory("WinTabify-Verb-");
-        var targetPath = dir.CreateSubdirectory("Target").FullName;
-        var path = dir.CreateSubdirectory("New").FullName;
-        var desktop = new WindowsExplorerDesktop();
-        var target = await desktop.CreateWindowAsync(targetPath);
-        object collection = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("9BA05972-F6A8-11CF-A442-00A0C90A8F39"), true)!)!;
-        dynamic windows = collection;
-        try
-        {
-            for (int i = 0; i < (int)windows.Count; i++)
-            {
-                object browser = windows.Item(i);
-                try
-                {
-                    if (NativeShell.TabHandle(browser) != target.Tabs[0].Handle) continue;
-                    nint site = Marshal.GetIUnknownForObject(browser);
-                    try
-                    {
-                        var command = new ExecuteInfo { Size = Marshal.SizeOf<ExecuteInfo>(), Mask = 0x08000400,
-                            Window = target.Handle, Verb = "opennewtab", File = path, Show = 1, Instance = site };
-                        var timer = Stopwatch.StartNew();
-                        bool ok = ShellExecuteEx(ref command);
-                        bool added = false;
-                        while (timer.ElapsedMilliseconds < 2500)
-                        {
-                            if (desktop.ReadWindows().FirstOrDefault(w => w.Handle == target.Handle)?.ContainsExactly([targetPath, path]) == true)
-                            { added = true; break; }
-                            await Task.Delay(25);
-                        }
-                        output.WriteLine($"Native verb probe: command={ok}, correct target={added}, time={timer.ElapsedMilliseconds} ms.");
-                    }
-                    finally { Marshal.Release(site); }
-                    break;
-                }
-                finally { Marshal.ReleaseComObject(browser); }
-            }
-        }
-        finally
-        {
-            Marshal.ReleaseComObject(collection);
-            foreach (var window in desktop.ReadWindows().Where(w => w.Complete && w.Tabs.All(t => t.Location == targetPath || t.Location == path)))
-                NativeShell.RequestWindowClose(window.Handle);
-            Directory.Delete(path);
-            Directory.Delete(targetPath);
-            dir.Delete();
-        }
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct ExecuteInfo
-    {
-        public int Size, Mask;
-        public nint Window;
-        public string Verb, File;
-        public nint Parameters, Directory;
-        public int Show;
-        public nint Instance, IdList, Class, ClassKey;
-        public int Hotkey;
-        public nint Icon, Process;
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool ShellExecuteEx(ref ExecuteInfo command);
 
     private async Task ExerciseTwentyWindowsAsync()
     {

@@ -113,7 +113,7 @@ public sealed class MergeTests
         internal int CreatedWindows { get; private set; }
         internal Action? BeforeClose { get; set; }
 
-        public IReadOnlyList<ExplorerWindow> ReadWindows() => Windows.ToList();
+        public IReadOnlyList<ExplorerWindow> ReadWindows(bool includeTabbed = true) => Windows.ToList();
 
         public Task<ExplorerWindow> CreateWindowAsync(string firstLocation)
         {
@@ -135,7 +135,10 @@ public sealed class MergeTests
             return Task.FromResult(next);
         }
 
-        public Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)
+        public async Task<int> CloseSourcesAsync(IReadOnlyList<ExplorerWindow> sources, ExplorerWindow target) =>
+            (await Task.WhenAll(sources.Select(w => CloseIfUnchangedAsync(w, target)))).Count(x => x);
+
+        private Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)
         {
             CloseAttempts++;
             BeforeClose?.Invoke();

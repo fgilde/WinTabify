@@ -46,7 +46,7 @@ dotnet run --project src/WinTabify
 
 Use `win-arm64` for Arm64. Each package contains a bundled application executable. Velopack adds its installer or portable launcher and update support. The installer, versioned package and `releases.<channel>.json` are written under `docs/downloads/<runtime>-<flavor>/`. Portable ZIPs are written to `docs/downloads/`.
 
-The workflow publishes all four channels and the bilingual site together after unit tests, package checks and a Windows 11 Arm64 desktop test pass. Published versions use `0.2.<workflow run number>`; re-running an attempt retains its version. The desktop test creates its own windows, exercises both inclusion modes, and verifies cleanup of multi-tab windows with duplicate paths. To run it locally on an unlocked Windows 11 desktop:
+The workflow publishes all four channels and the bilingual site together after unit tests, package checks and a Windows 11 Arm64 desktop test pass. Published versions use `0.2.<workflow run number>`; re-running an attempt retains its version. The desktop test opens twenty different folders in separate Explorer windows, measures discovery, tab creation and source closure, and checks the resulting tab strip. It also exercises both inclusion modes and multi-tab sources with duplicate folders. To run it locally on an unlocked Windows 11 desktop:
 
 ```powershell
 $env:WINTABIFY_EXPLORER_TEST = '1'

@@ -7,10 +7,18 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
 {
     private static readonly TimeSpan NavigationTimeout = TimeSpan.FromSeconds(12);
 
-    public IReadOnlyList<ExplorerWindow> ReadWindows()
+    public IReadOnlyList<ExplorerWindow> ReadWindows(bool includeTabbed = true)
     {
         using var views = new ShellViews();
-        return NativeShell.Frames().Select(views.Read).ToList();
+        var windows = NativeShell.Frames().Select(views.Read);
+        return (includeTabbed ? windows : windows.Where(IsSingleTabWindow)).ToList();
+    }
+
+    private static bool IsSingleTabWindow(ExplorerWindow window)
+    {
+        if (!window.Complete || window.Tabs.Count != 1) return false;
+        try { return ReadTabItems(AutomationElement.FromHandle(window.Handle)).Length == 1; }
+        catch (Exception ex) when (ShellViews.IsUnavailable(ex) || ex is ElementNotAvailableException) { return false; }
     }
 
     public async Task<ExplorerWindow> CreateWindowAsync(string firstLocation)
@@ -25,11 +33,13 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 Arguments = $"/n,\"{marker.FullName}\"",
                 UseShellExecute = false
             });
-            var window = await WaitAsync(() => ReadWindows().FirstOrDefault(w => !previous.Contains(w.Handle) &&
-                w.Complete && w.Tabs.Count == 1 && string.Equals(w.Tabs[0].Location, marker.FullName, StringComparison.OrdinalIgnoreCase)));
+            using var views = new ShellViews();
+            var window = await WaitAsync(() => NativeShell.Frames().Where(h => !previous.Contains(h)).Select(views.Read)
+                .FirstOrDefault(w => w.Complete && w.Tabs.Count == 1 &&
+                    string.Equals(w.Tabs[0].Location, marker.FullName, StringComparison.OrdinalIgnoreCase)));
             var tab = window.Tabs[0];
-            using (var views = new ShellViews()) views.Navigate(window.Handle, tab, firstLocation);
-            return await ConfirmAsync(window with { Tabs = [tab with { Location = firstLocation }] });
+            views.Navigate(window.Handle, tab, firstLocation);
+            return await ConfirmAsync(views, window with { Tabs = [tab with { Location = firstLocation }] });
         }
         finally
         {
@@ -41,7 +51,8 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
 
     public async Task<ExplorerWindow> AddTabsAsync(ExplorerWindow target, IReadOnlyList<string> locations)
     {
-        if (!Read(target.Handle).Matches(target)) throw new ExplorerChangedException();
+        using var views = new ShellViews();
+        if (!views.Read(target.Handle).Matches(target)) throw new ExplorerChangedException();
         var expected = target.Tabs.ToList();
         var known = expected.Select(t => t.Handle).ToHashSet();
         foreach (var location in locations)
@@ -55,17 +66,13 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 if (!known.IsSubsetOf(current) || current.Count > known.Count + 1)
                     throw new ExplorerChangedException();
                 if (current.Count == known.Count) return null;
-                nint handle = current.Single(h => !known.Contains(h));
-                using var views = new ShellViews();
-                var ready = views.ReadTab(handle);
-                if (ready == null) return null;
-                views.Navigate(target.Handle, ready, location);
-                return ready with { Location = location };
+                var tab = new ExplorerTab(current.Single(h => !known.Contains(h)), location);
+                return views.TryNavigateNewTab(target.Handle, tab) ? tab : null;
             });
             known.Add(added.Handle);
             expected.Add(added);
         }
-        return await ConfirmAsync(target with { Tabs = expected });
+        return await ConfirmAsync(views, target with { Tabs = expected });
     }
 
     private static void RequestTab(nint frame, List<nint> handles)
@@ -81,13 +88,34 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         ((InvokePattern)action).Invoke();
     }
 
-    public async Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target)
+    public async Task<int> CloseSourcesAsync(IReadOnlyList<ExplorerWindow> sources, ExplorerWindow target)
+    {
+        if (sources.Count == 0) return 0;
+        var byLocation = target.Tabs.ToDictionary(t => t.Location, FolderLocationComparer.Instance);
+        var singles = sources.Where(w => w.Tabs.Count == 1).ToArray();
+        int chunkSize = Math.Max(1, (singles.Length + 3) / 4);
+        var workers = singles.Chunk(chunkSize).Select(group => ShellWorker.RunAsync(() => CloseGroupAsync(group))).ToList();
+        workers.Add(CloseGroupAsync(sources.Where(w => w.Tabs.Count > 1)));
+        return (await Task.WhenAll(workers)).Sum();
+
+        async Task<int> CloseGroupAsync(IEnumerable<ExplorerWindow> group)
+        {
+            using var views = new ShellViews();
+            var results = await Task.WhenAll(group.Select(source =>
+                CloseIfUnchangedAsync(source, target, byLocation, views)));
+            return results.Count(closed => closed);
+        }
+    }
+
+    private async Task<bool> CloseIfUnchangedAsync(ExplorerWindow source, ExplorerWindow target,
+        IReadOnlyDictionary<string, ExplorerTab> byLocation, ShellViews views)
     {
         if (source.Handle == target.Handle) return false;
+        var required = source.Tabs.Select(t => byLocation[t.Location]).Distinct().ToArray();
         try
         {
             var initialTabIds = new HashSet<string>(StringComparer.Ordinal);
-            if (!await RequestCloseAsync(source, target, initialTabIds, true)) return !NativeShell.IsWindow(source.Handle);
+            if (!await RequestCloseAsync(source, target, required, initialTabIds, true, views)) return !NativeShell.IsWindow(source.Handle);
             var quiet = Stopwatch.StartNew();
             var limit = Stopwatch.StartNew();
             int lastCount = source.Tabs.Count;
@@ -104,10 +132,11 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 }
                 if (count > 0 && attempts < 3 && quiet.ElapsedMilliseconds >= 250 && NativeShell.IsWindowEnabled(source.Handle))
                 {
-                    var remaining = Read(source.Handle);
+                    using var remainingViews = new ShellViews();
+                    var remaining = remainingViews.Read(source.Handle);
                     if (remaining.Matches(source) || IsVerifiedRemainder(remaining, source))
                     {
-                        if (await RequestCloseAsync(remaining, target, initialTabIds, false))
+                        if (await RequestCloseAsync(remaining, target, required, initialTabIds, false, remainingViews))
                         {
                             source = remaining;
                             attempts++;
@@ -123,7 +152,7 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         }
         catch (Exception ex) when (ShellViews.IsUnavailable(ex) || ex is ElementNotAvailableException or ExplorerChangedException)
         {
-            trace?.Invoke($"Frame {source.Handle}: {ex.GetType().Name} {ex.Message}");
+            trace?.Invoke($"Frame {source.Handle}: {ex}");
             return !NativeShell.IsWindow(source.Handle);
         }
     }
@@ -158,56 +187,61 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
     }
 
     private async Task<bool> RequestCloseAsync(ExplorerWindow source, ExplorerWindow target,
-        HashSet<string> initialTabIds, bool first)
+        ExplorerTab[] required, HashSet<string> initialTabIds, bool first, ShellViews views)
     {
         var timer = Stopwatch.StartNew();
         do
         {
             if (!NativeShell.IsWindowEnabled(source.Handle)) return false;
-            using (var views = new ShellViews())
+            var current = views.Read(source.Handle);
+            if (current.Complete)
             {
-                var destination = views.Read(target.Handle);
-                var current = views.Read(source.Handle);
-                if (destination.Complete && current.Complete)
+                bool retained = required.All(t => NativeShell.GetAncestor(t.Handle, 2) == target.Handle &&
+                    views.ReadTab(t.Handle) == t);
+                bool same = current.Matches(source);
+                if (!retained || !same) return false;
+                if (source.Tabs.Count == 1 && initialTabIds.Count == 0)
+                    return views.RequestTabClose(source.Handle, source.Tabs[0]);
+                var root = AutomationElement.FromHandle(source.Handle);
+                var items = ReadTabItems(root);
+                bool known = first ? items.Length <= current.Tabs.Count :
+                    items.All(tab => initialTabIds.Contains(TabId(tab)));
+                if (!known)
                 {
-                    var root = AutomationElement.FromHandle(source.Handle);
-                    var items = ReadTabItems(root);
-                    bool retained = destination.ContainsExactly(target.Tabs.Select(t => t.Location).ToArray());
-                    bool same = current.Matches(source);
-                    bool known = first ? items.Length <= current.Tabs.Count :
-                        items.All(tab => initialTabIds.Contains(TabId(tab)));
-                    if (!retained || !same || !known)
-                    {
-                        trace?.Invoke($"Frame {source.Handle}: destination={retained}, source={same}, known={known}, accessible={items.Length}, native={current.Tabs.Count}.");
-                        return false;
-                    }
-                    if (first) initialTabIds.UnionWith(items.Select(TabId));
-                    if (items.Length > 1)
-                    {
-                        var selected = items.FirstOrDefault(t => Equals(
-                            t.GetCurrentPropertyValue(SelectionItemPattern.IsSelectedProperty), true)) ?? items[0];
-                        if (CloseTabItems(items.Where(t => t != selected)))
-                        {
-                            trace?.Invoke($"Frame {source.Handle}: invoked tab strip close for {items.Length - 1} background tabs.");
-                            return true;
-                        }
-                    }
-                    if (current.Tabs.Count > 1)
-                    {
-                        var titleBar = root.FindFirst(TreeScope.Descendants,
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TitleBar));
-                        var close = titleBar?.FindFirst(TreeScope.Descendants,
-                            new PropertyCondition(AutomationElement.AutomationIdProperty, "Close"));
-                        if (close != null && close.TryGetCurrentPattern(InvokePattern.Pattern, out var action))
-                        {
-                            trace?.Invoke($"Frame {source.Handle}: invoking title bar Close for {current.Tabs.Count} tabs.");
-                            ((InvokePattern)action).Invoke();
-                            return true;
-                        }
-                    }
-                    trace?.Invoke($"Frame {source.Handle}: requesting Shell close for {current.Tabs.Count} tabs.");
-                    return views.RequestClose(current);
+                    trace?.Invoke($"Frame {source.Handle}: destination={retained}, source={same}, known={known}, accessible={items.Length}, native={current.Tabs.Count}.");
+                    return false;
                 }
+                if (first) initialTabIds.UnionWith(items.Select(TabId));
+                if (!first && items.Length == 1 && CloseTabItems(items))
+                {
+                    trace?.Invoke($"Frame {source.Handle}: closed the last verified tab-strip item ({current.Tabs.Count} Shell views).");
+                    return true;
+                }
+                if (items.Length > 1)
+                {
+                    var selected = items.FirstOrDefault(t => Equals(
+                        t.GetCurrentPropertyValue(SelectionItemPattern.IsSelectedProperty), true)) ?? items[0];
+                    if (CloseTabItems(items.Where(t => t != selected)))
+                    {
+                        trace?.Invoke($"Frame {source.Handle}: invoked tab strip close for {items.Length - 1} background tabs.");
+                        return true;
+                    }
+                }
+                if (current.Tabs.Count > 1)
+                {
+                    var titleBar = root.FindFirst(TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TitleBar));
+                    var close = titleBar?.FindFirst(TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.AutomationIdProperty, "Close"));
+                    if (close != null && close.TryGetCurrentPattern(InvokePattern.Pattern, out var action))
+                    {
+                        trace?.Invoke($"Frame {source.Handle}: invoking title bar Close for {current.Tabs.Count} tabs.");
+                        ((InvokePattern)action).Invoke();
+                        return true;
+                    }
+                }
+                trace?.Invoke($"Frame {source.Handle}: requesting Shell close for {current.Tabs.Count} tabs.");
+                return views.RequestClose(current);
             }
             await Task.Delay(30);
         } while (timer.Elapsed < TimeSpan.FromSeconds(2));
@@ -222,17 +256,23 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         return current.Tabs.All(tab => locations.Remove(tab.Location));
     }
 
-    private static ExplorerWindow Read(nint frame)
+    private async Task<ExplorerWindow> ConfirmAsync(ShellViews views, ExplorerWindow expected)
     {
-        using var views = new ShellViews();
-        return views.Read(frame);
+        ExplorerWindow? current = null;
+        try
+        {
+            return await WaitAsync(() =>
+            {
+                current = views.Read(expected.Handle);
+                return current.Matches(expected) ? current : null;
+            });
+        }
+        catch (ExplorerChangedException)
+        {
+            trace?.Invoke($"Expected [{string.Join(", ", expected.Tabs)}], observed [{string.Join(", ", current?.Tabs ?? [])}].");
+            throw;
+        }
     }
-
-    private static Task<ExplorerWindow> ConfirmAsync(ExplorerWindow expected) => WaitAsync(() =>
-    {
-        var current = Read(expected.Handle);
-        return current.Matches(expected) ? current : null;
-    });
 
     private static async Task<T> WaitAsync<T>(Func<T?> probe) where T : class
     {

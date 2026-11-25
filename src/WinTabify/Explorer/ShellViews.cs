@@ -8,29 +8,33 @@ internal sealed class ShellViews : IDisposable
     private readonly object collection = Activator.CreateInstance(
         Type.GetTypeFromCLSID(new Guid("9BA05972-F6A8-11CF-A442-00A0C90A8F39"), true)!)!;
     private readonly Dictionary<nint, object> browsers = [];
+    private bool indexed;
+    private long lastMiss;
 
-    internal ShellViews()
+    private object? Find(nint handle)
     {
-        try
+        if (browsers.TryGetValue(handle, out var cached)) return cached;
+        if (lastMiss != 0 && Environment.TickCount64 - lastMiss < 16) return null;
+        dynamic windows = collection;
+        int count = windows.Count;
+        for (int i = count - 1; i >= 0; i--)
         {
-            dynamic windows = collection;
-            int count = windows.Count;
-            for (int i = 0; i < count; i++)
+            object? browser = null;
+            try
             {
-                object? browser = null;
-                try
-                {
-                    browser = windows.Item(i);
-                    if (browser is null) continue;
-                    nint handle = NativeShell.TabHandle(browser);
-                    if (handle != 0 && browsers.TryAdd(handle, browser))
-                        browser = null;
-                }
-                catch (Exception ex) when (IsUnavailable(ex)) { }
-                finally { if (browser != null) Marshal.ReleaseComObject(browser); }
+                browser = windows.Item(i);
+                if (browser == null) continue;
+                nint registered = NativeShell.TabHandle(browser);
+                if (registered == 0) continue;
+                if (browsers.TryAdd(registered, browser)) browser = null;
+                if (indexed && registered == handle) return browsers[handle];
             }
+            catch (Exception ex) when (IsUnavailable(ex)) { }
+            finally { if (browser != null) Marshal.ReleaseComObject(browser); }
         }
-        catch { Dispose(); throw; }
+        indexed = true;
+        if (!browsers.ContainsKey(handle)) lastMiss = Environment.TickCount64;
+        return browsers.GetValueOrDefault(handle);
     }
 
     internal static bool IsUnavailable(Exception ex) =>
@@ -49,14 +53,17 @@ internal sealed class ShellViews : IDisposable
 
     internal ExplorerTab? ReadTab(nint handle)
     {
-        if (!browsers.TryGetValue(handle, out var browser)) return null;
-        try { return GetLocation(browser) is { } location ? new(handle, location) : null; }
+        try { return Find(handle) is { } browser && GetLocation(browser) is { } location ? new(handle, location) : null; }
         catch (Exception ex) when (IsUnavailable(ex)) { return null; }
     }
 
     private static string? GetLocation(dynamic browser)
     {
         if ((bool)browser.Busy) return null;
+        string? url = browser.LocationURL;
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile && uri.Fragment.Length == 0 &&
+            uri.Query.Length == 0 && uri.LocalPath.IndexOfAny(['#', '%']) < 0)
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(uri.LocalPath));
         object? document = null, folder = null, item = null;
         try
         {
@@ -84,9 +91,24 @@ internal sealed class ShellViews : IDisposable
     internal void Navigate(nint frame, ExplorerTab tab, string location)
     {
         if (NativeShell.GetAncestor(tab.Handle, 2) != frame ||
-            !browsers.TryGetValue(tab.Handle, out var browser) || GetLocation(browser) != tab.Location)
+            Find(tab.Handle) is not { } browser || GetLocation(browser) != tab.Location)
             throw new ExplorerChangedException();
-        ((dynamic)browser).Navigate2(location);
+        ((dynamic)browser).Navigate2(NativeShell.NavigationAddress(location));
+    }
+
+    internal bool TryNavigateNewTab(nint frame, ExplorerTab tab)
+    {
+        if (NativeShell.GetAncestor(tab.Handle, 2) != frame) throw new ExplorerChangedException();
+        try
+        {
+            if (Find(tab.Handle) is not { } browser || GetLocation(browser) == null) return false;
+            ((dynamic)browser).Navigate2(NativeShell.NavigationAddress(tab.Location));
+            return true;
+        }
+        catch (COMException ex) when (ex.HResult is unchecked((int)0x80010001) or unchecked((int)0x8001010A))
+        {
+            return false;
+        }
     }
 
     internal bool RequestClose(ExplorerWindow source)
@@ -95,17 +117,18 @@ internal sealed class ShellViews : IDisposable
         bool requested = false;
         foreach (var tab in source.Tabs.OrderBy(t => NativeShell.IsWindowVisible(t.Handle)))
         {
-            if (NativeShell.GetAncestor(tab.Handle, 2) != source.Handle ||
-                !browsers.TryGetValue(tab.Handle, out var browser)) continue;
-            try
-            {
-                if (GetLocation(browser) != tab.Location) continue;
-                ((dynamic)browser).Quit();
-                requested = true;
-            }
+            try { requested |= RequestTabClose(source.Handle, tab); }
             catch (Exception ex) when (IsUnavailable(ex)) { }
         }
         return requested || !NativeShell.IsWindow(source.Handle);
+    }
+
+    internal bool RequestTabClose(nint frame, ExplorerTab tab)
+    {
+        if (NativeShell.GetAncestor(tab.Handle, 2) != frame || Find(tab.Handle) is not { } browser ||
+            GetLocation(browser) != tab.Location) return false;
+        ((dynamic)browser).Quit();
+        return true;
     }
 
     public void Dispose()

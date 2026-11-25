@@ -35,8 +35,8 @@ internal sealed class MergeService(IExplorerDesktop desktop)
         }
         if (!target.ContainsExactly(locations)) throw new ExplorerChangedException();
 
-        var closed = await Task.WhenAll(sources.Select(w => desktop.CloseIfUnchangedAsync(w, target)));
-        return new(locations.Count, closed.Count(x => x), unreadable, closed.Count(x => !x), true);
+        var closed = await desktop.CloseSourcesAsync(sources, target);
+        return new(locations.Count, closed, unreadable, sources.Count - closed, true);
     }
 }
 

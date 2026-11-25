@@ -101,7 +101,7 @@ internal sealed class ShellViews : IDisposable
         if (NativeShell.GetAncestor(tab.Handle, 2) != frame) throw new ExplorerChangedException();
         try
         {
-            if (Find(tab.Handle) is not { } browser) return false;
+            if (Find(tab.Handle) is not { } browser || GetLocation(browser) == null) return false;
             ((dynamic)browser).Navigate2(NativeShell.NavigationAddress(tab.Location));
             return true;
         }

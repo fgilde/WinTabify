@@ -138,10 +138,11 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                 }
                 if (count > 0 && attempts < 3 && quiet.ElapsedMilliseconds >= 250 && NativeShell.IsWindowEnabled(source.Handle))
                 {
-                    var remaining = views.Read(source.Handle);
+                    using var remainingViews = new ShellViews();
+                    var remaining = remainingViews.Read(source.Handle);
                     if (remaining.Matches(source) || IsVerifiedRemainder(remaining, source))
                     {
-                        if (await RequestCloseAsync(remaining, target, required, initialTabIds, false, views))
+                        if (await RequestCloseAsync(remaining, target, required, initialTabIds, false, remainingViews))
                         {
                             source = remaining;
                             attempts++;
@@ -217,6 +218,11 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
                     return false;
                 }
                 if (first) initialTabIds.UnionWith(items.Select(TabId));
+                if (!first && items.Length == 1 && CloseTabItems(items))
+                {
+                    trace?.Invoke($"Frame {source.Handle}: closed the last verified tab-strip item ({current.Tabs.Count} Shell views).");
+                    return true;
+                }
                 if (items.Length > 1)
                 {
                     var selected = items.FirstOrDefault(t => Equals(

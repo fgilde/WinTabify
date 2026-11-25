@@ -1,4 +1,5 @@
 using System.Windows.Threading;
+using System.Windows.Automation;
 using System.Diagnostics;
 using WinTabify.Explorer;
 using Xunit;
@@ -50,7 +51,9 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             desktop.Measure = false;
             output.WriteLine($"20 distinct windows: total={elapsed} ms; scan={desktop.ScanMs} ms; tabs={desktop.TabsMs} ms; close={elapsed - desktop.ScanMs - desktop.TabsMs} ms");
             Assert.Equal(19, result.Closed);
-            Assert.True(Assert.Single(desktop.ReadWindows()).ContainsExactly(paths));
+            var retained = Assert.Single(desktop.ReadWindows());
+            Assert.True(retained.ContainsExactly(paths));
+            await AssertVisibleTabsAsync(retained.Handle, paths);
         }
         finally
         {
@@ -91,6 +94,7 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             Assert.Equal(3, second.Closed);
             var target = Assert.Single(desktop.ReadWindows());
             Assert.True(target.ContainsExactly(paths));
+            await AssertVisibleTabsAsync(target.Handle, paths);
             var duplicates = await desktop.CreateWindowAsync(paths[3]);
             await desktop.AddTabsAsync(duplicates, [paths[0], paths[3]]);
             timer.Restart();
@@ -109,6 +113,22 @@ public sealed class ExplorerDesktopTests(ITestOutputHelper output)
             foreach (var path in paths) Directory.Delete(path);
             directory.Delete();
         }
+    }
+
+    private static async Task AssertVisibleTabsAsync(nint frame, string[] paths)
+    {
+        var expected = paths.Select(Path.GetFileName).Order().ToArray();
+        var limit = Stopwatch.StartNew();
+        string[] titles;
+        do
+        {
+            var items = AutomationElement.FromHandle(frame).FindAll(TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem));
+            titles = items.Cast<AutomationElement>().Select(t => t.Current.Name).Order().ToArray();
+            if (expected.SequenceEqual(titles)) return;
+            await Task.Delay(50);
+        } while (limit.Elapsed < TimeSpan.FromSeconds(3));
+        Assert.Equal(expected, titles);
     }
 
     private sealed class TestWindows(string[] paths, ITestOutputHelper output) : IExplorerDesktop

@@ -55,28 +55,22 @@ internal sealed class WindowsExplorerDesktop(Action<string>? trace = null) : IEx
         if (!views.Read(target.Handle).Matches(target)) throw new ExplorerChangedException();
         var expected = target.Tabs.ToList();
         var known = expected.Select(t => t.Handle).ToHashSet();
-        foreach (var batch in locations.Chunk(8))
+        foreach (var location in locations)
         {
             var handles = NativeShell.TabHandles(target.Handle);
             if (!known.SetEquals(handles)) throw new ExplorerChangedException();
-            for (int i = 0; i < batch.Length; i++) RequestTab(target.Handle, handles);
-            int assigned = 0;
-            var pending = new List<ExplorerTab>(batch.Length);
-            await WaitAsync(() =>
+            RequestTab(target.Handle, handles);
+            var added = await WaitAsync(() =>
             {
                 var current = NativeShell.TabHandles(target.Handle);
-                if (!known.IsSubsetOf(current)) throw new ExplorerChangedException();
-                foreach (var handle in current.Where(h => !known.Contains(h)))
-                {
-                    if (assigned == batch.Length) throw new ExplorerChangedException();
-                    var tab = new ExplorerTab(handle, batch[assigned++]);
-                    known.Add(handle);
-                    expected.Add(tab);
-                    pending.Add(tab);
-                }
-                pending.RemoveAll(tab => views.TryNavigateNewTab(target.Handle, tab));
-                return assigned == batch.Length && pending.Count == 0 ? target : null;
+                if (!known.IsSubsetOf(current) || current.Count > known.Count + 1)
+                    throw new ExplorerChangedException();
+                if (current.Count == known.Count) return null;
+                var tab = new ExplorerTab(current.Single(h => !known.Contains(h)), location);
+                return views.TryNavigateNewTab(target.Handle, tab) ? tab : null;
             });
+            known.Add(added.Handle);
+            expected.Add(added);
         }
         return await ConfirmAsync(views, target with { Tabs = expected });
     }
